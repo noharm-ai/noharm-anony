@@ -1,0 +1,5 @@
+Flask
+Flask-API
+flask-cors
+striprtf
+uwsgi

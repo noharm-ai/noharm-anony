@@ -1,0 +1,18 @@
+name: Build
+on:
+    push:
+      branches: [ master ] 
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build Docker Image
+        run: docker build -t anony .
+      - name: Run Docker Image
+        run: docker run -d --name myanony -p 80:80 anony
+      - name: Test Anony Service
+        run: |
+            sleep 10
+            curl http://localhost/
