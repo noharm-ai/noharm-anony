@@ -19,7 +19,7 @@ def hello():
 def getCleanText():
 
     data = request.get_json()
-    text = data.get('text', '')
+    text = data.get('TEXT', '')
     cleanText = ''
 
     try:
@@ -32,7 +32,7 @@ def getCleanText():
         return {
             'status': 'success',
             'text': text,
-            'cleanText': cleanText
+            'texto': cleanText
         }, status.HTTP_200_OK
 
     except Exception as e:
