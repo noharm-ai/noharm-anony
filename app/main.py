@@ -6,6 +6,7 @@ from flair.models import SequenceTagger
 from flair.data import Sentence
 from nltk.tokenize import sent_tokenize
 from flair.visual.ner_html import split_to_spans
+from waitress import serve
 import re, nltk
 import ssl
 
@@ -16,13 +17,18 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-app = FlaskAPI(__name__)
-CORS(app)
-
 print('Load Punkt')
 nltk.download('punkt')
 print('Load Model')
 tagger = SequenceTagger.load('best-model.pt')
+
+def create_app():
+    app = FlaskAPI(__name__)
+    CORS(app)
+
+    return app
+
+app = create_app()
 
 def remove_html_tags(text):
     clean = re.compile('<.*?>')
@@ -67,7 +73,7 @@ def getCleanText():
             sentences.append(Sentence(s))
 
         print('Predicting...')
-        tagger.predict(sentences)
+        tagger.predict(sentences, verbose=True)
         print('Predicted.')
 
         cleanText = remove_ner(sentences)
@@ -86,4 +92,4 @@ def getCleanText():
         }, status.HTTP_500_INTERNAL_SERVER_ERROR
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    serve(app, host='0.0.0.0', port=80)
