@@ -8,3 +8,4 @@ RUN pip install --upgrade pip
 RUN pip install -r ./requirements.txt
 
 COPY ./app /app
+RUN wget -c https://noharm.ai/anony/best-model.pt -P /app --no-check-certificate

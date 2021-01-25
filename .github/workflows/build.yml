@@ -12,7 +12,11 @@ jobs:
         run: docker build -t anony .
       - name: Run Docker Image
         run: docker run -d --name myanony -p 80:80 anony
-      - name: Test Anony Service
+      - name: Test Anony Health
         run: |
             sleep 10
             curl http://localhost/
+      - name: Test Anony Service
+        run: |
+            sleep 5
+            curl -X PUT -H 'Accept: application/json' -H 'Content-Type: application/json' http://localhost/clean -d '{"text" : "FISIOTERAPIA TRAUMATO - MANHÃ  Henrique Dias, 38 anos. Exercícios metabólicos de extremidades inferiores. Realizo mobilização patelar e leve mobilização de flexão de joelho conforme liberado pelo Dr Marcelo Arocha. Oriento cuidados e posicionamentos."}'
