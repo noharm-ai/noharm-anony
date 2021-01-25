@@ -1,7 +1,7 @@
 name: Build
 on:
     push:
-      branches: [ master ] 
+      branches: [ main ] 
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
         run: docker build -t anony .
       - name: Run Docker Image
         run: docker run -d --name myanony -p 80:80 anony
-      - name: Test Anony Health
+      - name: Ping Anony Service
         run: |
             sleep 10
             curl http://localhost/
