@@ -1,4 +1,4 @@
-# Serviço Interno de Remoção de Nomes
+# Serviço Local de Remoção de Nomes
 
 TBD
 
