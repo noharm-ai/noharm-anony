@@ -80,7 +80,11 @@ def getCleanText():
 
         return {
             'status': 'success',
-            'text': text,
+            'fkevolucao': data.get('FKEVOLUCAO', '1234'),
+            'dtevolucao': data.get('DTEVOLUCAO', '2021-01-01'),
+            'cargo': data.get('CARGO', 'cargo'),
+            'prescritor': data.get('NOME', 'nome'),
+            'nratendimento': data.get('NRATENDIMENTO', '1234'),
             'texto': cleanText
         }, status.HTTP_200_OK
 
