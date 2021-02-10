@@ -109,4 +109,4 @@ def getCleanText():
         }, status.HTTP_500_INTERNAL_SERVER_ERROR
 
 if __name__ == "__main__":
-    serve(app, host='0.0.0.0', port=5000)
+    serve(app, host='0.0.0.0', port=80)
