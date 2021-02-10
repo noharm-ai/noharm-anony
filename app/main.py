@@ -8,7 +8,7 @@ from nltk.tokenize import sent_tokenize
 from flair.visual.ner_html import split_to_spans
 from waitress import serve
 import re, nltk
-import ssl
+import ssl, time
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -34,6 +34,9 @@ def remove_html_tags(text):
     clean = re.compile('<.*?>')
     return re.sub(clean, '', text)
 
+PARAGRAPH = """<p>{sentence}</p>"""
+MAX_TIME = 30
+
 def remove_ner(sentences) -> str:
     sentences_html = []
     for s in sentences:
@@ -44,7 +47,7 @@ def remove_ner(sentences) -> str:
             if tag:
                 escaped_fragment = '***'
             spans_html.append(escaped_fragment)
-        line = "".join(spans_html)
+        line = PARAGRAPH.format(sentence="".join(spans_html))
         sentences_html.append(line)
 
     return "\n".join(sentences_html)
@@ -68,13 +71,29 @@ def getCleanText():
 
         sents_words = sent_tokenize(plainText)
 
+        start = time.time()
         sentences = []
-        for s in sents_words:
-            sentences.append(Sentence(s))
+        batch = []
+        batch_length = 0
+        processed = 0
+        for i, s in enumerate(sents_words):
+            batch_length += len(s) / 100
+            batch.append(Sentence(s))
 
-        print('Predicting...')
-        tagger.predict(sentences, verbose=True)
-        print('Predicted.')
+            end = time.time()
+            if (i % 5) == 0 and i > 0 and (end - start + batch_length) < MAX_TIME:
+                tagger.predict(batch, verbose=True)
+                sentences.extend(batch)
+                processed += len(batch)
+                batch = []
+                batch_length = 0
+
+        end = time.time()
+        if (end - start + batch_length) < MAX_TIME:
+            tagger.predict(batch, verbose=True)
+            processed += len(batch)
+
+        sentences.extend(batch)
 
         cleanText = remove_ner(sentences)
 
@@ -85,7 +104,9 @@ def getCleanText():
             'cargo': data.get('CARGO', 'cargo'),
             'prescritor': data.get('NOME', 'nome'),
             'nratendimento': data.get('NRATENDIMENTO', '1234'),
-            'texto': cleanText
+            'texto': cleanText,
+            'processed': processed,
+            'total': len(sentences)
         }, status.HTTP_200_OK
 
     except Exception as e:
