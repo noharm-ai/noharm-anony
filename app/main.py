@@ -35,7 +35,7 @@ def remove_html_tags(text):
     return re.sub(clean, '', text)
 
 PARAGRAPH = """<p>{sentence}</p>"""
-MAX_TIME = 30
+MAX_TIME = 45
 
 def remove_ner(sentences) -> str:
     sentences_html = []
@@ -73,27 +73,19 @@ def getCleanText():
 
         start = time.time()
         sentences = []
-        batch = []
-        batch_length = 0
+        sent_length = 0
         processed = 0
-        for i, s in enumerate(sents_words):
-            batch_length += len(s) / 100
-            batch.append(Sentence(s))
+        for s in sents_words:
+            sent_length += len(s) / 100
+            sent = Sentence(s)
 
             end = time.time()
-            if (i % 5) == 0 and i > 0 and (end - start + batch_length) < MAX_TIME:
-                tagger.predict(batch, verbose=True)
-                sentences.extend(batch)
-                processed += len(batch)
-                batch = []
-                batch_length = 0
-
-        end = time.time()
-        if (end - start + batch_length) < MAX_TIME:
-            tagger.predict(batch, verbose=True)
-            processed += len(batch)
-
-        sentences.extend(batch)
+            if (end - start + sent_length) < MAX_TIME:
+                tagger.predict(sent, verbose=True)
+                sentences.append(sent)
+                processed += 1
+            else:
+                sentences.append(sent)
 
         cleanText = remove_ner(sentences)
 
@@ -117,4 +109,4 @@ def getCleanText():
         }, status.HTTP_500_INTERNAL_SERVER_ERROR
 
 if __name__ == "__main__":
-    serve(app, host='0.0.0.0', port=80)
+    serve(app, host='0.0.0.0', port=5000)
