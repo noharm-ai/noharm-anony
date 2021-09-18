@@ -97,7 +97,6 @@ def getCleanText():
             'prescritor': data.get('NOME', 'nome'),
             'nratendimento': data.get('NRATENDIMENTO', '1234'),
             'texto': cleanText,
-            'processed': processed,
             'total': len(sentences)
         }, status.HTTP_200_OK
 
