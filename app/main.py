@@ -35,7 +35,7 @@ def remove_html_tags(text):
     return re.sub(clean, '', text)
 
 PARAGRAPH = """<p>{sentence}</p>"""
-MAX_TIME = 45
+MAX_TIME = 20
 
 def remove_ner(sentences) -> str:
     sentences_html = []
