@@ -69,7 +69,7 @@ def getCleanText():
         else:
             plainText = rtf_to_text(text)
 
-        sents_words = sent_tokenize(plainText)
+        sents_words = sent_tokenize(plainText.replace('\n','.\n'))
 
         start = time.time()
         sentences = []
