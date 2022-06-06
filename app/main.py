@@ -36,7 +36,7 @@ def remove_html_tags(text):
 
 def replace_breaklines(text):
     clean = re.compile('([\r?\n|\r])')
-    return re.sub(clean, r".\1", text)
+    return re.sub(clean, r". \1", text)
 
 PARAGRAPH = """<p>{sentence}</p>"""
 MAX_TIME = 20
@@ -67,13 +67,14 @@ def getCleanText():
     cleanText = ''
 
     try:
+
+        text = replace_breaklines(text)
         
         if 'html5' in text:
             plainText = remove_html_tags(text)
         else:
             plainText = rtf_to_text(text)
 
-        plainText = replace_breaklines(plainText)
         sents_words = sent_tokenize(plainText)
 
         start = time.time()
