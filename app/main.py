@@ -63,13 +63,14 @@ def getCleanText():
     cleanText = ''
 
     try:
-
+        text = text.replace('\n','.\n')
+        
         if 'html5' in text:
             plainText = remove_html_tags(text)
         else:
             plainText = rtf_to_text(text)
 
-        sents_words = sent_tokenize(plainText.replace('\n','.\n'))
+        sents_words = sent_tokenize(plainText)
 
         start = time.time()
         sentences = []
