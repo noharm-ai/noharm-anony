@@ -2,7 +2,5 @@ Flask
 Flask-API
 flask-cors
 striprtf
-torch==1.7.1
-flair==0.7
 nltk
 waitress
