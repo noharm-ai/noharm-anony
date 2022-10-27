@@ -14,21 +14,18 @@ docker build -t anony . #build
 docker run -p 80:80 anony #test
 
 docker run -d --name myanony -p 80:80 anony #deamon
-
 ```
 
 ### 1.1. Identificar o IP e alterar no Remote URL do Nifi (no InvokeHTTP)
 
 ```
 docker network inspect bridge
-
 ```
 
 ### 1.2. Testar
 
 ```
 curl -X PUT -H 'Accept: application/json' -H 'Content-Type: application/json' http://localhost/clean -d '{"TEXT" : "FISIOTERAPIA TRAUMATO - MANHÃ  Henrique Dias, 38 anos. Exercícios metabólicos de extremidades inferiores. Realizo mobilização patelar e leve mobilização de flexão de joelho conforme liberado pelo Dr Marcelo Arocha. Oriento cuidados e posicionamentos."}'
-
 ```
 
 ### 2. Outras configurações
