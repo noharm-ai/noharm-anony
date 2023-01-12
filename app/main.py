@@ -10,17 +10,9 @@ from waitress import serve
 import re, nltk
 import ssl, time
 
-try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-
-print('Load Punkt')
-nltk.download('punkt')
 print('Load Model')
 tagger = SequenceTagger.load('best-model.pt')
+print('Done!')
 
 def create_app():
     app = FlaskAPI(__name__)
