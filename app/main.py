@@ -10,9 +10,9 @@ from waitress import serve
 import re, nltk
 import ssl, time
 
-print('Load Model')
+print('Load Model', flush=True)
 tagger = SequenceTagger.load('best-model.pt')
-print('Done!')
+print('Done!', flush=True)
 
 def create_app():
     app = FlaskAPI(__name__)
