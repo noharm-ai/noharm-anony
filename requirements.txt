@@ -1,4 +1,4 @@
-Flask
+Flask==2.2.3
 Flask-API
 flask-cors
 striprtf
