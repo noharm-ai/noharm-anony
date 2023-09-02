@@ -8,7 +8,7 @@ from nltk.tokenize import sent_tokenize
 from flair.visual.ner_html import split_to_spans
 from waitress import serve
 import re, nltk
-import ssl, time
+import ssl, time, traceback
 
 print('Load Model', flush=True)
 tagger = SequenceTagger.load('best-model.pt')
@@ -65,7 +65,7 @@ def getCleanText():
         if 'html5' in text:
             plainText = remove_html_tags(text)
         else:
-            plainText = rtf_to_text(text)
+            plainText = rtf_to_text(text, errors="ignore")
 
         sents_words = sent_tokenize(plainText)
 
@@ -102,7 +102,7 @@ def getCleanText():
 
         return {
             'status': 'error',
-            'message': str(e)
+            'message': str(e) +  ''.join(traceback.format_exc())
         }, status.HTTP_500_INTERNAL_SERVER_ERROR
 
 if __name__ == "__main__":
