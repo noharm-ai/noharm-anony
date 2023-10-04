@@ -13,7 +13,7 @@ docker build -t anony . #build
 
 docker run -p 80:80 anony #test
 
-docker run -d --name myanony -p 80:80 anony -log-opt max-size=100m #deamon
+docker run -d --log-opt max-size=100m --name myanony -p 80:80 anony #deamon
 ```
 
 ### 1.1. Identificar o IP e alterar no Remote URL do Nifi (no InvokeHTTP)
