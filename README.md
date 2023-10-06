@@ -37,7 +37,7 @@ docker network create --subnet=172.19.0.0/16 noharm-net
 
 docker network connect noharm-net nifi
 
-docker run -d --name myanony --net noharm-net --ip 172.19.0.3 -p 80:80 anony
+docker run -d --log-opt max-size=100m --name myanony --net noharm-net --ip 172.19.0.3 -p 80:80 anony
 ```
 
 ### 2.1. Run Limited Memory Docker
