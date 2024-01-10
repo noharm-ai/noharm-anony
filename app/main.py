@@ -6,7 +6,9 @@ from flair.models import SequenceTagger
 from flair.data import Sentence
 from nltk.tokenize import sent_tokenize
 from waitress import serve
+from bs4 import BeautifulSoup
 import re, time, traceback
+
 
 print('Load Model', flush=True)
 tagger = SequenceTagger.load('best-model.pt')
@@ -20,18 +22,25 @@ def create_app():
 
 app = create_app()
 
-def remove_html_tags(text):
-    clean = re.compile('<.*?>')
-    return re.sub(clean, '', text)
+def remove_html_tags(html):
+    soup = BeautifulSoup(html, "html.parser")
+    return soup.get_text()
 
 def replace_breaklines(text):
     clean = re.compile('([\r?\n|\r])')
     return re.sub(clean, r". \1", text)
 
+def is_rtf(text):
+    if '{rtf' in text[:100].replace('\\', ''):
+        return True
+    
+    return False
+
 MAX_TIME = 20
 
 def remove_ner(sentences, original_text) -> str:
-    replaced_text = original_text
+    soup = BeautifulSoup(original_text, "html.parser")
+    replaced_text = str(soup)
 
     for s in sentences:
         for l in s.get_labels():
@@ -54,7 +63,7 @@ def getCleanText():
     try:
         text = replace_breaklines(text)
 
-        if format == 'rtf':
+        if format == 'rtf' or is_rtf(original_text):
             plainText = rtf_to_text(text, errors="ignore")
             #rtf must be replaced by plain text
             original_text = plainText

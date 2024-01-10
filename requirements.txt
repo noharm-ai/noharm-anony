@@ -6,3 +6,4 @@ striprtf
 nltk
 waitress
 Werkzeug==2.3.7
+beautifulsoup4
