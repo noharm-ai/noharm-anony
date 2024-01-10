@@ -30,6 +30,12 @@ def replace_breaklines(text):
     clean = re.compile('([\r?\n|\r])')
     return re.sub(clean, r". \1", text)
 
+def is_rtf(text):
+    if '{rtf' in text[:100].replace('\\', ''):
+        return True
+    
+    return False
+
 MAX_TIME = 20
 
 def remove_ner(sentences, original_text) -> str:
@@ -57,7 +63,7 @@ def getCleanText():
     try:
         text = replace_breaklines(text)
 
-        if format == 'rtf':
+        if format == 'rtf' or is_rtf(original_text):
             plainText = rtf_to_text(text, errors="ignore")
             #rtf must be replaced by plain text
             original_text = plainText
