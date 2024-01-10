@@ -1,14 +1,12 @@
-from flask import request, url_for, jsonify
+from flask import request
 from flask_api import FlaskAPI, status
 from flask_cors import CORS
 from striprtf.striprtf import rtf_to_text
 from flair.models import SequenceTagger
 from flair.data import Sentence
 from nltk.tokenize import sent_tokenize
-from flair.visual.ner_html import split_to_spans
 from waitress import serve
-import re, nltk
-import ssl, time, traceback
+import re, time, traceback
 
 print('Load Model', flush=True)
 tagger = SequenceTagger.load('best-model.pt')
@@ -30,23 +28,16 @@ def replace_breaklines(text):
     clean = re.compile('([\r?\n|\r])')
     return re.sub(clean, r". \1", text)
 
-PARAGRAPH = """<p>{sentence}</p>"""
 MAX_TIME = 20
 
-def remove_ner(sentences) -> str:
-    sentences_html = []
-    for s in sentences:
-        spans = split_to_spans(s)
-        spans_html = list()
-        for fragment, tag in spans:
-            escaped_fragment = fragment
-            if tag:
-                escaped_fragment = '***'
-            spans_html.append(escaped_fragment)
-        line = PARAGRAPH.format(sentence="".join(spans_html))
-        sentences_html.append(line)
+def remove_ner(sentences, original_text) -> str:
+    replaced_text = original_text
 
-    return "\n".join(sentences_html)
+    for s in sentences:
+        for l in s.get_labels():
+            replaced_text = replaced_text.replace(l.data_point.text, '***')
+    
+    return replaced_text
 
 @app.route("/")
 def hello():
@@ -56,16 +47,19 @@ def hello():
 def getCleanText():
     data = request.get_json()
     text = data.get('TEXT', '')
+    original_text = data.get('TEXT', '')
+    format = data.get('FORMAT', 'html')
     cleanText = ''
 
     try:
-
         text = replace_breaklines(text)
-        
-        if 'html5' in text:
-            plainText = remove_html_tags(text)
-        else:
+
+        if format == 'rtf':
             plainText = rtf_to_text(text, errors="ignore")
+            #rtf must be replaced by plain text
+            original_text = plainText
+        else:
+            plainText = remove_html_tags(text)
 
         sents_words = sent_tokenize(plainText)
 
@@ -85,7 +79,7 @@ def getCleanText():
             else:
                 sentences.append(sent)
 
-        cleanText = remove_ner(sentences)
+        cleanText = remove_ner(sentences, original_text)
 
         return {
             'status': 'success',
