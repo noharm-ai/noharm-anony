@@ -41,10 +41,11 @@ MAX_TIME = 20
 def remove_ner(sentences, original_text) -> str:
     soup = BeautifulSoup(original_text, "html.parser")
     replaced_text = str(soup)
+    
 
     for s in sentences:
         for l in s.get_labels():
-            replaced_text = replaced_text.replace(l.data_point.text, '***')
+            replaced_text = re.sub(r"\b(" + l.data_point.text + r")\b", '***', replaced_text, flags=re.IGNORECASE)
     
     return replaced_text
 
