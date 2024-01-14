@@ -90,8 +90,6 @@ def getCleanText():
 
         if format == 'rtf' or is_rtf(original_text):
             plainText = rtf_to_text(text, errors="ignore")
-            #rtf must be replaced by plain text
-            original_text = plainText
         else:
             plainText = remove_html_tags(text)
 
