@@ -86,13 +86,12 @@ def getCleanText():
     cleanText = ''
 
     try:
-        text = replace_breaklines(text)
 
         if format == 'rtf' or is_rtf(original_text):
-            plainText = rtf_to_text(text, errors="ignore")
-        else:
-            plainText = remove_html_tags(text)
+            original_text = rtf_to_text(text, errors="ignore")            
 
+        plainText = replace_breaklines(original_text)
+        plainText = remove_html_tags(plainText)
         sents_words = sent_tokenize(plainText)
 
         start = time.time()
