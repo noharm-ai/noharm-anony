@@ -1,7 +1,7 @@
 from flask import request
 from flask_api import FlaskAPI, status
 from flask_cors import CORS
-from striprtf.striprtf import rtf_to_text
+import subprocess
 from flair.models import SequenceTagger
 from flair.data import Sentence
 from nltk.tokenize import sent_tokenize
@@ -21,6 +21,30 @@ def create_app():
     return app
 
 app = create_app()
+
+def rtf_to_text(rtf_content, errors):
+
+    with open("input.rtf", "w") as rtf_file:
+        rtf_file.write(rtf_content)    
+
+    command = f'unrtf --html input.rtf'
+
+    try:
+        # Run the command and capture the output
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+
+        # Check if the command was successful
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            # Print the error message if the command failed
+            print(f"Error: {result.stderr}")
+            return None
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
 
 def remove_html_tags(html):
     soup = BeautifulSoup(html, "html.parser")
