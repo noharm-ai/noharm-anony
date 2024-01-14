@@ -1,6 +1,6 @@
 FROM python:3.8-slim-buster
 
-RUN apt-get update && apt-get install -y wget git vim curl htop unzip
+RUN apt-get update && apt-get install -y wget git vim curl htop unzip unrtf
 
 ENV FLASK_APP=anonyapp
 ENV FLASK_RUN_HOST=0.0.0.0
