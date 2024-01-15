@@ -7,8 +7,7 @@ from flair.data import Sentence
 from nltk.tokenize import sent_tokenize
 from waitress import serve
 from bs4 import BeautifulSoup
-import re, time, traceback
-
+import re, time, traceback, unicodedata
 
 print('Load Model', flush=True)
 tagger = SequenceTagger.load('best-model.pt')
@@ -73,6 +72,12 @@ def remove_ner(sentences, original_text) -> str:
     
     return replaced_text
 
+def remove_accents(input_str):
+    nfkd_form = unicodedata.normalize('NFKD', input_str)
+    only_ascii = nfkd_form.encode('ASCII', 'ignore')
+    only_ascii = only_ascii.decode('utf-8')
+    return str(only_ascii)
+
 @app.route("/")
 def hello():
     return "Hello World from Flask"
@@ -88,6 +93,7 @@ def getCleanText():
     try:
 
         if format == 'rtf' or is_rtf(original_text):
+            text = remove_accents(text)
             original_text = rtf_to_text(text, errors="ignore")            
 
         plainText = replace_breaklines(original_text)
