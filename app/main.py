@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 import re, time, traceback, unicodedata
 
 print('Load Model', flush=True)
-tagger = SequenceTagger.load('best-model.pt')
+tagger = SequenceTagger.load('final-model.pt')
 print('Done!', flush=True)
 
 def create_app():

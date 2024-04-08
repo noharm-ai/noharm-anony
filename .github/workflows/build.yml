@@ -14,7 +14,7 @@ jobs:
         run: docker run -d --name myanony -p 80:80 anony
       - name: Ping Anony Service
         run: |
-            sleep 60
+            sleep 120
             curl http://localhost/
       - name: Test Anony Service
         run: |
