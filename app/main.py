@@ -85,8 +85,8 @@ def hello():
 @app.route("/clean", methods=['PUT'])
 def getCleanText():
     data = request.get_json()
-    text = data.get('text', '')
-    original_text = data.get('text', '')
+    text = data.get('text', data.get('TEXT', ''))
+    original_text = data.get('text', data.get('TEXT', ''))
     format = data.get('format', 'html')
     cleanText = ''
 
@@ -120,11 +120,11 @@ def getCleanText():
 
         return {
             'status': 'success',
-            'fkevolucao': data.get('fkevolucao', '1234'),
-            'dtevolucao': data.get('dtevolucao', '2021-01-01'),
-            'cargo': data.get('cargo', 'cargo'),
-            'prescritor': data.get('nome', 'nome'),
-            'nratendimento': data.get('nratendimento', '1234'),
+            'fkevolucao': data.get('fkevolucao', data.get('FKEVOLUCAO', '1234')),
+            'dtevolucao': data.get('dtevolucao', data.get('DTEVOLUCAO', '2021-01-01')),
+            'cargo': data.get('cargo', data.get('CARGO', 'cargo')),
+            'prescritor': data.get('nome', data.get('NOME', 'nome')),
+            'nratendimento': data.get('nratendimento', data.get('NRATENDIMENTO', '1234')),
             'texto': cleanText,
             'total': len(sentences)
         }, status.HTTP_200_OK
