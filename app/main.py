@@ -68,7 +68,7 @@ def remove_ner(sentences, original_text) -> str:
 
     for s in sentences:
         for l in s.get_labels():
-            replaced_text = re.sub(r"\b(" + l.data_point.text + r")\b", '***', replaced_text, flags=re.IGNORECASE)
+            replaced_text = re.sub(r"\b(" + re.escape(l.data_point.text) + r")\b", '***', replaced_text, flags=re.IGNORECASE)
     
     return replaced_text
 
