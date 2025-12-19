@@ -1,9 +1,7 @@
-Flask==2.2.5
-Flask-API
-flask-cors
+fastapi
+uvicorn[standard]
 striprtf
 nltk
-waitress
 Werkzeug==2.3.7
 beautifulsoup4
-flair==0.13.1
+flair==0.15.1

@@ -1,140 +1,131 @@
-from flask import request
-from flask_api import FlaskAPI, status
-from flask_cors import CORS
-import subprocess
+import re, time, traceback, unicodedata, subprocess
+from bs4 import BeautifulSoup
 from flair.models import SequenceTagger
 from flair.data import Sentence
 from nltk.tokenize import sent_tokenize
-from waitress import serve
-from bs4 import BeautifulSoup
-import re, time, traceback, unicodedata
 
-print('Load Model', flush=True)
-tagger = SequenceTagger.load('final-model.pt')
-print('Done!', flush=True)
+from fastapi import FastAPI, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette import status
 
-def create_app():
-    app = FlaskAPI(__name__)
-    CORS(app)
+MAX_TIME = 20
 
-    return app
+app = FastAPI(title="NoHarm Anony API")
 
-app = create_app()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+tagger: SequenceTagger | None = None
+
+@app.on_event("startup")
+def load_model():
+    global tagger
+    print("Load Model", flush=True)
+    tagger = SequenceTagger.load("noharm-anony-ettin-17m.pt")
+    print("Done!", flush=True)
 
 def rtf_to_text(rtf_content, errors):
-
     with open("input.rtf", "w") as rtf_file:
-        rtf_file.write(rtf_content)    
+        rtf_file.write(rtf_content)
 
-    command = f'unrtf --html input.rtf'
-
-    try:
-        # Run the command and capture the output
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-
-        # Check if the command was successful
-        if result.returncode == 0:
-            return result.stdout
-        else:
-            # Print the error message if the command failed
-            print(f"Error: {result.stderr}")
-            return None
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-
+    command = "unrtf --html input.rtf"
+    result = subprocess.run(command, shell=True, text=True, capture_output=True)
+    if result.returncode == 0:
+        return result.stdout
+    print(f"Error: {result.stderr}")
+    return None
 
 def remove_html_tags(html):
     soup = BeautifulSoup(html, "html.parser")
     return soup.get_text()
 
 def replace_breaklines(text):
-    clean = re.compile('([\r?\n|\r])')
+    clean = re.compile(r"([\r?\n|\r])")
     return re.sub(clean, r". \1", text)
 
 def is_rtf(text):
-    if '{rtf' in text[:100].replace('\\', ''):
-        return True
-    
-    return False
-
-MAX_TIME = 20
+    return "{rtf" in text[:100].replace("\\", "")
 
 def remove_ner(sentences, original_text) -> str:
     soup = BeautifulSoup(original_text, "html.parser")
     replaced_text = str(soup)
-    
-
     for s in sentences:
         for l in s.get_labels():
-            replaced_text = re.sub(r"\b(" + re.escape(l.data_point.text) + r")\b", '***', replaced_text, flags=re.IGNORECASE)
-    
+            replaced_text = re.sub(
+                r"\b(" + re.escape(l.data_point.text) + r")\b",
+                "***",
+                replaced_text,
+                flags=re.IGNORECASE,
+            )
     return replaced_text
 
 def remove_accents(input_str):
-    nfkd_form = unicodedata.normalize('NFKD', input_str)
-    only_ascii = nfkd_form.encode('ASCII', 'ignore')
-    only_ascii = only_ascii.decode('utf-8')
+    nfkd_form = unicodedata.normalize("NFKD", input_str)
+    only_ascii = nfkd_form.encode("ASCII", "ignore").decode("utf-8")
     return str(only_ascii)
 
-@app.route("/")
+@app.get("/")
 def hello():
-    return "Hello World from Flask"
+    return "Hello World from FastAPI"
 
-@app.route("/clean", methods=['PUT'])
-def getCleanText():
-    data = request.get_json()
-    text = data.get('text', data.get('TEXT', ''))
-    original_text = data.get('text', data.get('TEXT', ''))
-    format = data.get('format', 'html')
-    cleanText = ''
+@app.put("/clean")
+def get_clean_text(payload: dict = Body(...)):
+    global tagger
+    if tagger is None:
+        return JSONResponse(
+            {"status": "error", "message": "Model not loaded"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    text = payload.get("text", payload.get("TEXT", ""))
+    original_text = payload.get("text", payload.get("TEXT", ""))
+    format_ = payload.get("format", "html")
 
     try:
-
-        if format == 'rtf' or is_rtf(original_text):
+        if format_ == "rtf" or is_rtf(original_text):
             text = remove_accents(text)
-            original_text = rtf_to_text(text, errors="ignore")            
+            original_text = rtf_to_text(text, errors="ignore") or ""
 
-        plainText = replace_breaklines(original_text)
-        plainText = remove_html_tags(plainText)
-        sents_words = sent_tokenize(plainText)
+        plain_text = replace_breaklines(original_text)
+        plain_text = remove_html_tags(plain_text)
+        sents_words = sent_tokenize(plain_text)
 
         start = time.time()
         sentences = []
         sent_length = 0
-        processed = 0
+
         for s in sents_words:
             sent_length += len(s) / 100
             sent = Sentence(s)
 
-            end = time.time()
-            if (end - start + sent_length) < MAX_TIME:
+            if (time.time() - start + sent_length) < MAX_TIME:
                 tagger.predict(sent, verbose=True)
-                sentences.append(sent)
-                processed += 1
-            else:
-                sentences.append(sent)
+            sentences.append(sent)
 
-        cleanText = remove_ner(sentences, original_text)
+        clean_text = remove_ner(sentences, original_text)
 
-        return {
-            'status': 'success',
-            'fkevolucao': data.get('fkevolucao', data.get('FKEVOLUCAO', '1234')),
-            'dtevolucao': data.get('dtevolucao', data.get('DTEVOLUCAO', '2021-01-01')),
-            'cargo': data.get('cargo', data.get('CARGO', 'cargo')),
-            'prescritor': data.get('nome', data.get('NOME', 'nome')),
-            'nratendimento': data.get('nratendimento', data.get('NRATENDIMENTO', '1234')),
-            'texto': cleanText,
-            'total': len(sentences)
-        }, status.HTTP_200_OK
+        return JSONResponse(
+            {
+                "status": "success",
+                "fkevolucao": payload.get("fkevolucao", payload.get("FKEVOLUCAO", "1234")),
+                "dtevolucao": payload.get("dtevolucao", payload.get("DTEVOLUCAO", "2021-01-01")),
+                "cargo": payload.get("cargo", payload.get("CARGO", "cargo")),
+                "prescritor": payload.get("nome", payload.get("NOME", "nome")),
+                "nratendimento": payload.get("nratendimento", payload.get("NRATENDIMENTO", "1234")),
+                "texto": clean_text,
+                "total": len(sentences),
+            },
+            status_code=status.HTTP_200_OK,
+        )
 
     except Exception as e:
-
-        return {
-            'status': 'error',
-            'message': str(e) +  ''.join(traceback.format_exc())
-        }, status.HTTP_500_INTERNAL_SERVER_ERROR
-
-if __name__ == "__main__":
-    serve(app, host='0.0.0.0', port=80)
+        return JSONResponse(
+            {"status": "error", "message": str(e) + "".join(traceback.format_exc())},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
