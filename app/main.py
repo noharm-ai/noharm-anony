@@ -70,6 +70,33 @@ def remove_accents(input_str):
     only_ascii = nfkd_form.encode("ASCII", "ignore").decode("utf-8")
     return str(only_ascii)
 
+PRESERVE_PATTERNS = [
+    re.compile(
+        r"((?:comunicado|avisado)\s*(?:para\s*\(nome\)\s*:?)?\s*:?\s*(?:</b>)?\s*(?:enf[ªºao]?\.?|dr[a]?\.?)?\s*:?\s*)\*\*\*",
+        re.IGNORECASE,
+    ),
+]
+
+def restore_context(anonymized_text, original_text):
+    result = anonymized_text
+    for pattern in PRESERVE_PATTERNS:
+        for match in pattern.finditer(anonymized_text):
+            prefix = match.group(1)
+            prefix_pattern = re.compile(
+                re.escape(prefix) + r"(.+?)(?:<br\s*/?>|</?p>|</?div>|\n|$)",
+                re.IGNORECASE,
+            )
+            original_match = prefix_pattern.search(original_text)
+            if original_match:
+                original_name = original_match.group(1).strip()
+                if original_name and original_name != "***":
+                    result = result.replace(
+                        match.group(0),
+                        match.group(1) + original_name,
+                        1,
+                    )
+    return result
+
 @app.get("/")
 def hello():
     return "Hello World from FastAPI"
@@ -86,6 +113,7 @@ def get_clean_text(payload: dict = Body(...)):
     text = payload.get("text", payload.get("TEXT", ""))
     original_text = payload.get("text", payload.get("TEXT", ""))
     format_ = payload.get("format", "html")
+    preserve_context = payload.get("preserve_context", payload.get("PRESERVE_CONTEXT", []))
 
     try:
         if format_ == "rtf" or is_rtf(original_text):
@@ -109,6 +137,10 @@ def get_clean_text(payload: dict = Body(...)):
             sentences.append(sent)
 
         clean_text = remove_ner(sentences, original_text)
+
+        cargo = payload.get("cargo", payload.get("CARGO", ""))
+        if preserve_context and cargo in preserve_context:
+            clean_text = restore_context(clean_text, original_text)
 
         return JSONResponse(
             {
