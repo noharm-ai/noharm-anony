@@ -22,9 +22,25 @@ from anony_onnx_runtime import Pacote  # noqa: E402
 # contexto (que e como o modelo foi treinado) e descartar span de baixa confianca ou que
 # nao tenha forma de nome. As duas mudam o texto redigido MAIS que a troca de motor.
 #
-# Por isso o default aqui reproduz o comportamento de sempre: a troca e so de motor, e
-# mudar a semantica fica sendo uma decisao separada, com medicao propria.
-CONTEXTO = os.environ.get("ANONY_CONTEXTO", "frase")
+# `CONTEXTO` mudou de `frase` para `documento` COM MEDICAO, e ela e o motivo desta versao
+# existir. Em 817 evolucoes clinicas reais reservadas para avaliacao (1.572 nomes), pelo
+# proprio /clean deste servico:
+#
+#     modo         nomes removidos      precisao por ocorrencia
+#     frase              65,14%                 76,89%
+#     documento          96,63%                 90,98%
+#
+# A diferenca NAO e o modelo: dos 548 nomes que o modo `frase` deixa em claro, **519 estao
+# em trecho que o servico nunca leu** e so 29 sao erro de modelo. A causa e o orcamento
+# MAX_TIME abaixo, cujo termo `sent_length` vira um teto de ~2.000 caracteres — e num
+# documento cujo primeiro paragrafo ja passa disso, a nota sai INTEIRA sem redigir nada
+# (medido: 14 ms de resposta num texto de 6.220 caracteres).
+#
+# O preco e latencia: ~50 ms passam a ~400 ms numa nota de 8 mil caracteres. Num PUT
+# sincrono isso e aceitavel, e e o que compra 31 pontos de recall.
+#
+# `ANONY_CONTEXTO=frase` volta ao comportamento anterior sem rebuild.
+CONTEXTO = os.environ.get("ANONY_CONTEXTO", "documento")
 FILTROS = os.environ.get("ANONY_FILTROS", "0") == "1"
 THREADS = int(os.environ.get("ANONY_THREADS", "0")) or None
 
@@ -194,10 +210,11 @@ def get_clean_text(payload: dict = Body(...)):
         if CONTEXTO == "frase":
             for s in sents_words:
                 sent_length += len(s) / 100
-                # Orcamento: frase que nao cabe NAO e predita, e sai sem redigir. Note que
-                # `sent_length` cresce com o TAMANHO do texto, entao na pratica o corte cai
-                # por volta de 2.000 caracteres mesmo em maquina rapida. Com o motor ONNX
-                # o corte morde mais tarde, e o texto longo passa a ser mais coberto.
+                # Orcamento do modo antigo, mantido so como rollback. Ele NAO e um limite de
+                # tempo: `sent_length` cresce com o TAMANHO do texto e domina o termo de
+                # relogio, entao o corte cai por volta de 2.000 caracteres em qualquer
+                # maquina, e acelerar o motor nao o move. Custa 31 pontos de recall — ver a
+                # tabela em `CONTEXTO`, acima.
                 if (time.time() - start + sent_length) < MAX_TIME:
                     spans.extend(achados(pacote.spans_do_texto(s, plain=s)))
         else:

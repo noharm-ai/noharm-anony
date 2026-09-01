@@ -1,10 +1,10 @@
 FROM python:3.13.11-slim
 
 # Pacote do modelo, com VERSÃO no nome. Trocar de modelo é trocar este ARG
-# (`docker build --build-arg ANONY_PACOTE=noharm-anony-onnx-o1.2 .`); a versão também fica
+# (`docker build --build-arg ANONY_PACOTE=noharm-anony-onnx-o1.4 .`); a versão também fica
 # registrada no manifesto dentro do pacote e sai no endpoint /versao. O `.pt` antigo
 # continua publicado, então o rollback é o Dockerfile anterior.
-ARG ANONY_PACOTE=noharm-anony-onnx-o1.1
+ARG ANONY_PACOTE=noharm-anony-onnx-o1.3
 # Espelho local ou ambiente sem saída para a internet: aponte para outro servidor.
 ARG ANONY_BASE_URL=https://noharm.ai/anony
 
