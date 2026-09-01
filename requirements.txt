@@ -5,5 +5,10 @@ nltk==3.10.3
 beautifulsoup4==4.15.0
 onnxruntime==1.29.0
 tokenizers==0.23.1
-numpy==2.5.2
+# numpy TEM TETO em 2.2.x enquanto houver Xeon pré-Nehalem (ex.: E5420) na frota: a wheel
+# do >= 2.3 é baseline x86-64-v2 (exige SSE4.2+POPCNT) e morre no import nessas CPUs; do
+# >= 2.4 nem compilar da fonte resolve (o mínimo do meson virou X86_V2). A 2.2.x despacha
+# SSE4.2/AVX2/AVX512 em runtime, então CPU moderna não perde nada. Antes de subir esta
+# linha, teste: qemu-x86_64-static -cpu Penryn python -c "import numpy" dentro da imagem.
+numpy==2.2.6
 segtok==1.5.11

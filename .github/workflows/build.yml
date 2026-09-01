@@ -23,3 +23,12 @@ jobs:
         run: |
             sleep 5
             curl -X PUT -H 'Accept: application/json' -H 'Content-Type: application/json' http://localhost/clean -d '{"text" : "FISIOTERAPIA TRAUMATO - MANHÃ  Henrique Dias, 38 anos. Exercícios metabólicos de extremidades inferiores. Realizo mobilização patelar e leve mobilização de flexão de joelho conforme liberado pelo Dr Marcelo Arocha. Oriento cuidados e posicionamentos."}'
+      # Hospital ainda roda Xeon pré-Nehalem (E5420: sem SSE4.2/POPCNT, i.e. sem x86-64-v2).
+      # A wheel do numpy >= 2.3 é baseline v2 e morre no import nessas boxes — foi a queda
+      # de 2026-09-01. Penryn no qemu = conjunto de instruções exato do E5420; este passo
+      # pega regressão de QUALQUER wheel (numpy, onnxruntime, tokenizers) antes do deploy.
+      - name: Test CPU antiga (Xeon E5420, sem x86-64-v2)
+        run: |
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static
+            docker run --rm -v /usr/bin/qemu-x86_64-static:/qemu:ro anony \
+              /qemu -cpu Penryn /usr/local/bin/python3 -c "import numpy, onnxruntime, tokenizers; print('ok em x86-64-v1')"
