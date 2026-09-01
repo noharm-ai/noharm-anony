@@ -1,9 +1,9 @@
-fastapi==0.136.1
-uvicorn[standard]==0.47.0
-striprtf==0.0.32
-nltk==3.10.0
-beautifulsoup4==4.14.3
-onnxruntime==1.23.2
-tokenizers==0.22.2
-numpy==2.2.6
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+striprtf==0.0.33
+nltk==3.10.3
+beautifulsoup4==4.15.0
+onnxruntime==1.29.0
+tokenizers==0.23.1
+numpy==2.5.2
 segtok==1.5.11
