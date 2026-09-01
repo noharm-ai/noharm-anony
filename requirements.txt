@@ -4,4 +4,7 @@ striprtf==0.0.32
 nltk==3.9.4
 Werkzeug==2.3.7
 beautifulsoup4==4.14.3
-flair==0.15.1
+onnxruntime==1.23.2
+tokenizers==0.22.2
+numpy==2.2.6
+segtok==1.5.11
