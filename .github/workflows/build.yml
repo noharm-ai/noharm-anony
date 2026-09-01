@@ -11,6 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
+      # Roda sem imagem e sem modelo de proposito: `app/orcamento.py` nao importa o runtime,
+      # entao esta decisao (recusar texto que nao cabe no Read Timeout do cliente) e conferivel
+      # em segundos, antes do build de 200 MB.
+      - name: Testar orcamento de tempo
+        run: python3 app/test_orcamento.py
+
       - name: Build Docker Image
         run: docker build -t anony .
       - name: Run Docker Image
@@ -27,6 +33,15 @@ jobs:
       # A wheel do numpy >= 2.3 é baseline v2 e morre no import nessas boxes — foi a queda
       # de 2026-09-01. Penryn no qemu = conjunto de instruções exato do E5420; este passo
       # pega regressão de QUALQUER wheel (numpy, onnxruntime, tokenizers) antes do deploy.
+      # O orcamento so recusa quando ha vazao medida; com ANONY_TIMEOUT_S desligado (default)
+      # o servico responde como sempre. Este passo trava o default: subir com o orcamento
+      # ligado por engano cortaria nota em producao.
+      - name: Conferir que o orcamento vem DESLIGADO por default
+        run: |
+            curl -s http://localhost/versao > /tmp/versao.json
+            cat /tmp/versao.json
+            python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['timeout_s']==0 else 'orcamento ligado por default: %r' % v['timeout_s'])"
+
       - name: Test CPU antiga (Xeon E5420, sem x86-64-v2)
         run: |
             sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static

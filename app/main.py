@@ -7,7 +7,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette import status
 
-MAX_TIME = 20
+from orcamento import Medidor, cabe_no_orcamento, motivo_recusa
+
+# Teto do modo `frase`. O nome diz tempo e o efeito e TAMANHO: no guard la embaixo o termo
+# `sent_length` (chars/100) domina o de relogio, entao o corte cai por volta de
+# `MAX_TIME * 100` caracteres em qualquer maquina. Fica configuravel para nao exigir rebuild,
+# com o nome de sempre para nao quebrar quem ja o conhece — mas leia `ANONY_MAX_TIME=20`
+# como "teto de ~2.000 caracteres".
+MAX_TIME = float(os.environ.get("ANONY_MAX_TIME", "20"))
+
+# Paciencia do CLIENTE, em segundos. Zero (default) desliga. Ver `app/orcamento.py` para o
+# porque de estimar em vez de interromper, e por que a vazao e medida em vez de configurada.
+# Ajuste este valor junto com o Read Timeout do `InvokeHTTP`, e sempre ABAIXO dele: o
+# orcamento cobre a inferencia, e a rede e a serializacao ainda vem por cima.
+TIMEOUT_S = float(os.environ.get("ANONY_TIMEOUT_S", "0"))
+medidor = Medidor()
 
 # O modelo agora e ONNX e roda sem flair, sem torch e sem CUDA. O pacote baixado no build
 # traz o proprio runtime, que faz a tokenizacao, a janela de subtokens e a decodificacao
@@ -178,6 +192,12 @@ def versao():
         "pacote": pacote.versao if pacote else None,
         "contexto": CONTEXTO,
         "filtros": FILTROS,
+        "max_time": MAX_TIME,
+        "timeout_s": TIMEOUT_S,
+        # A vazao MEDIDA nesta maquina: e o unico numero que diz o que esta instalacao
+        # aguenta, e nao ha como saber de fora sem ele. `null` = ainda sem amostra.
+        "vazao_chars_s": round(medidor.vazao) if medidor.vazao else None,
+        "amostras": medidor.amostras,
     }
 
 @app.put("/clean")
@@ -195,6 +215,10 @@ def get_clean_text(payload: dict = Body(...)):
     preserve_context = payload.get("preserve_context", payload.get("PRESERVE_CONTEXT", []))
 
     try:
+        # Relogio do pedido INTEIRO. O `start` mais abaixo e outro, e serve so ao guard do
+        # modo `frase`. A vazao tem de incluir o preparo (unrtf, BeautifulSoup, tokenize):
+        # e ela que vira estimativa, e o cliente espera pelo pedido todo, nao pela inferencia.
+        t0 = time.time()
         if format_ == "rtf" or is_rtf(original_text):
             text = remove_accents(text)
             original_text = rtf_to_text(text, errors="ignore") or ""
@@ -203,9 +227,29 @@ def get_clean_text(payload: dict = Body(...)):
         plain_text = remove_html_tags(plain_text)
         sents_words = sent_tokenize(plain_text)
 
+        # Orcamento ANTES da inferencia: o preparo acima (rtf/html/tokenize) e barato, a
+        # inferencia e que custa. Recusar aqui devolve em milissegundos o mesmo desfecho que
+        # o cliente teria depois de esperar o timeout inteiro — porem dito, e sem queimar a
+        # CPU da box num pedido que ninguem mais espera.
+        estimativa = medidor.estimativa(len(plain_text))
+        if not cabe_no_orcamento(len(plain_text), estimativa, TIMEOUT_S):
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": motivo_recusa(
+                        len(plain_text), estimativa, TIMEOUT_S, medidor.vazao
+                    ),
+                    "chars": len(plain_text),
+                    "estimativa_s": round(estimativa, 1),
+                    "timeout_s": TIMEOUT_S,
+                },
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
         start = time.time()
         spans = []
         sent_length = 0
+        nao_lidos = 0
 
         if CONTEXTO == "frase":
             for s in sents_words:
@@ -217,8 +261,36 @@ def get_clean_text(payload: dict = Body(...)):
                 # tabela em `CONTEXTO`, acima.
                 if (time.time() - start + sent_length) < MAX_TIME:
                     spans.extend(achados(pacote.spans_do_texto(s, plain=s)))
+                else:
+                    nao_lidos += len(s)
         else:
             spans = achados(pacote.spans_do_texto(plain_text, plain=plain_text))
+
+        # `len - nao_lidos`: no modo `frase` truncado, creditar o texto inteiro a um tempo
+        # que so cobriu parte dele inflaria a vazao — e vazao inflada e recusa que nao
+        # acontece, ou seja o orcamento deixaria de proteger justamente sob carga.
+        medidor.registra(len(plain_text) - nao_lidos, time.time() - t0)
+
+        # Trecho nao lido = nome nao redigido. Devolver 200 com o texto meio-redigido e o
+        # mecanismo exato dos 519 nomes da tabela la em cima: o cliente grava, e nada no
+        # monitoramento acusa. Falha visivel (o cliente descarta e reprocessa) e pior para o
+        # dado e melhor para o paciente que vazamento silencioso.
+        if nao_lidos:
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": (
+                        f"orcamento do modo frase cortou {nao_lidos} de {len(plain_text)} chars "
+                        f"antes de ler: o texto redigido estaria INCOMPLETO. "
+                        f"Suba o ANONY_MAX_TIME (teto ~= valor * 100 chars) "
+                        f"ou use ANONY_CONTEXTO=documento, que nao tem este corte."
+                    ),
+                    "chars": len(plain_text),
+                    "chars_nao_lidos": nao_lidos,
+                    "max_time": MAX_TIME,
+                },
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
 
         clean_text = remove_ner(spans, original_text)
 
