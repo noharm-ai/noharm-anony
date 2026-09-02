@@ -46,6 +46,7 @@ jobs:
             cat /tmp/versao.json
             python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['timeout_s']==0 else 'orcamento ligado por default: %r' % v['timeout_s'])"
             python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['orcamento']=='recusa' else 'modo do orcamento nao e recusa por default: %r' % v['orcamento'])"
+            python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v.get('servico') and v.get('pacote') else 'faltou servico ou pacote no /versao: %r' % v)"
 
       # O modo `parcial` so aparece com o orcamento LIGADO e com vazao ja medida — subir um
       # container proprio e a unica forma de exercitar o caminho inteiro (medir, estourar,

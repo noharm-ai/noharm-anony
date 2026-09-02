@@ -133,6 +133,20 @@ Três coisas que ele **não** é:
 span sobre o original inteiro, então nome achado no prefixo também é apagado onde reaparece
 na cauda.
 
+### 2.4.2 `/versao`: duas versões, porque mudam separado
+
+```
+$ curl -s http://localhost/versao
+{"servico":"1.4","pacote":"o1.3","contexto":"documento","filtros":false,
+ "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
+ "vazao_chars_s":983,"amostras":2406}
+```
+
+`servico` é o código deste repositório; `pacote` é o modelo ONNX baixado no build
+(`ARG ANONY_PACOTE`). Uma resposta nova com o mesmo modelo — o caso do modo `parcial` — só
+aparece na primeira. `vazao_chars_s` é a vazão **medida nesta máquina**, e é o único número
+que diz o que a instalação aguenta (`null` = ainda sem amostra).
+
 ### 2.5 Variáveis de ambiente
 
 | variável | default | o que faz |

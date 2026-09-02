@@ -89,7 +89,17 @@ class PacoteFrase(Pacote):
     def frases(self, plain):
         return [plain] if plain.strip() else []
 
-app = FastAPI(title="NoHarm Anony API")
+# Versao do SERVICO — o codigo deste repositorio, e nao o modelo. O `pacote` que sai ao
+# lado dela no /versao vem do manifesto do tar baixado no build (`ARG ANONY_PACOTE`) e
+# versiona o ONNX; sao coisas que mudam em ritmos diferentes e por PRs diferentes. Ate aqui
+# so o modelo tinha versao, entao uma mudanca de comportamento do /clean chegava na frota
+# indistinguivel da anterior — que e exatamente o que o /versao existe para impedir.
+#
+# Suba isto em todo PR que mude o que o /clean DEVOLVE (campo novo, status diferente,
+# decisao nova). Mudanca so de dependencia ou de build nao precisa.
+SERVICO = "1.4"
+
+app = FastAPI(title="NoHarm Anony API", version=SERVICO)
 
 app.add_middleware(
     CORSMiddleware,
@@ -202,11 +212,16 @@ def versao():
     """Fronteira de versao: sem isto, a resposta de antes e a de depois de uma troca de
     modelo sao indistinguiveis para quem opera o servico.
 
-    So a versao do pacote e a configuracao — nome de arquivo e hash do modelo ficam de
-    fora de proposito: identificam o artefato para qualquer um que alcance a porta, e quem
+    Sao DUAS versoes, porque mudam separado: `servico` e o codigo deste repositorio e
+    `pacote` e o modelo ONNX baixado no build. Uma resposta nova com o mesmo modelo — o
+    caso do modo `parcial` — so aparece na primeira.
+
+    Fora isso, so a configuracao: nome de arquivo e hash do modelo ficam de fora de
+    proposito, porque identificam o artefato para qualquer um que alcance a porta, e quem
     precisa disso ja tem o `manifest.json` dentro do container.
     """
     return {
+        "servico": SERVICO,
         "pacote": pacote.versao if pacote else None,
         "contexto": CONTEXTO,
         "filtros": FILTROS,
