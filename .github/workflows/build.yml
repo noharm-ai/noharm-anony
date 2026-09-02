@@ -1,7 +1,11 @@
 name: Build
 on:
     push:
-      branches: [ main ] 
+      branches: [ main ]
+    # Tambem no PR: os testes do orcamento (passo abaixo) so rodavam DEPOIS do merge, entao
+    # nao travavam nada. E este build ja e o unico lugar que exercita o /clean de verdade.
+    pull_request:
+      branches: [ main ]
 
 permissions:
   contents: read
@@ -41,6 +45,45 @@ jobs:
             curl -s http://localhost/versao > /tmp/versao.json
             cat /tmp/versao.json
             python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['timeout_s']==0 else 'orcamento ligado por default: %r' % v['timeout_s'])"
+            python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['orcamento']=='recusa' else 'modo do orcamento nao e recusa por default: %r' % v['orcamento'])"
+
+      # O modo `parcial` so aparece com o orcamento LIGADO e com vazao ja medida — subir um
+      # container proprio e a unica forma de exercitar o caminho inteiro (medir, estourar,
+      # cortar em frase, devolver 200 rotulado). `ANONY_TIMEOUT_S=1` com texto de ~60 mil
+      # chars estoura em qualquer runner, e as frases curtas garantem que ALGUMA cabe: com
+      # zero frase lida a resposta correta e 413, e o teste estaria medindo outra coisa.
+      - name: Testar ANONY_ORCAMENTO=parcial de ponta a ponta
+        run: |
+            docker run -d --name anonyparcial -p 81:80 \
+              -e ANONY_TIMEOUT_S=1 -e ANONY_ORCAMENTO=parcial anony
+            sleep 120
+            python3 - <<'PY'
+            import json, urllib.request
+            def clean(texto):
+                req = urllib.request.Request(
+                    "http://localhost:81/clean",
+                    data=json.dumps({"fkevolucao": 42, "text": texto}).encode(),
+                    method="PUT", headers={"Content-Type": "application/json"})
+                r = urllib.request.urlopen(req, timeout=300)
+                return r.status, json.loads(r.read())
+            frase = "O paciente Henrique Dias segue estavel no leito da unidade. "
+            # 1o pedido: sem amostra nao se recusa nada — e ele que ensina a vazao.
+            st, _ = clean(frase * 17)
+            assert st == 200, st
+            # 2o: nao cabe em 1 s em runner nenhum.
+            # Nome unico na ULTIMA frase: com ~60 mil chars e 1 s de orcamento ele cai no
+            # trecho nao lido em qualquer runner. Ele e o que prova que a cauda volta como
+            # original — e nao pode ser um nome que tambem aparece no prefixo, porque a
+            # redacao e por TEXTO do span e apagaria as duas ocorrencias.
+            st, body = clean(frase * 1000 + "Por fim o acompanhante Zenaide Kowalski assinou.")
+            assert st == 200, (st, body)
+            assert body["redacao"] == "parcial", body
+            assert 0 < body["chars_nao_lidos"] < body["chars_total"], body
+            assert body["fkevolucao"] == 42, "o parcial tem de manter os campos do insert"
+            assert "***" in body["texto"], "o prefixo lido tem de sair redigido"
+            assert "Zenaide Kowalski" in body["texto"], "a cauda volta como no original"
+            print("parcial ok:", {k: v for k, v in body.items() if k != "texto"})
+            PY
 
       - name: Test CPU antiga (Xeon E5420, sem x86-64-v2)
         run: |

@@ -78,8 +78,8 @@ Silver 4514Y. Medido com a mesma carga:
 | 76.000 chars | 13,0 s | — |
 
 `ANONY_TIMEOUT_S` resolve isso sem calibração por box: o serviço **mede a própria vazão**
-(caracteres por segundo, visível em `/versao`) e recusa, em milissegundos e com o motivo
-dito, o texto que não caberia no orçamento. Nada é processado pela metade.
+(caracteres por segundo, visível em `/versao`) e, em milissegundos e com o motivo dito,
+decide o que fazer com o texto que não caberia no orçamento — por padrão, recusa.
 
 ```
 docker run -d --name myanony -e ANONY_TIMEOUT_S=12 -p 80:80 anony
@@ -93,12 +93,53 @@ comportamento anterior. A recusa sai como **HTTP 413** com `chars`, `estimativa_
 Enquanto não houver nenhuma amostra medida, nada é recusado: a primeira nota longa depois
 do boot passa e é ela que ensina a vazão à instalação.
 
+### 2.4.1 Recusar ou redigir só o que cabe (`ANONY_ORCAMENTO`)
+
+Recusar entrega o desfecho certo para o **paciente** — nada meio-redigido é gravado — e o
+errado para o **dado**: a nota não existe. Onde o cliente não consegue reprocessar (flow que
+auto-termina o `Failure`, cursor que não volta), isso é perda definitiva de evolução
+clínica. Medido em 02/09/2026 numa box de hospital: **175 notas descartadas em 26 h**, todas
+as longas, sem fila para inspecionar.
+
+`ANONY_ORCAMENTO=parcial` dá a outra escolha:
+
+```
+docker run -d --name myanony -e ANONY_TIMEOUT_S=12 -e ANONY_ORCAMENTO=parcial -p 80:80 anony
+```
+
+Ele lê o **prefixo que cabe**, redige esse prefixo e devolve o resto como no original, com
+**200** e com o quanto ficou por ler dito na resposta:
+
+```json
+{"status": "success", "fkevolucao": 42, "texto": "...", "total": 812,
+ "redacao": "parcial", "chars_nao_lidos": 65878, "chars_total": 78657,
+ "aviso": "redacao PARCIAL: os 65878 chars finais de 78657 nao foram lidos e ..."}
+```
+
+Três coisas que ele **não** é:
+
+- **Não é o modo `frase` de volta.** O corte é medido (`vazão × ANONY_TIMEOUT_S`, o inverso
+  exato da recusa), não os ~2.000 chars fixos do `ANONY_MAX_TIME`, e o prefixo vai ao
+  modelo numa chamada só, com contexto de documento. Pelos números da avaliação, dos 548
+  nomes que o modo `frase` deixa em claro **519 estão em trecho nunca lido** e só 29 são
+  erro de modelo: o custo de recall é de não ler, não de fragmentar.
+- **Não é silencioso.** Os campos `redacao`, `chars_nao_lidos`, `chars_total` e `aviso`
+  aparecem **só** quando houve corte — no caminho feliz a resposta é idêntica à de sempre,
+  para não quebrar cliente com `Fail on Unmatched Fields` no `PutDatabaseRecord`.
+- **Não devolve texto inteiro em claro.** Se nem a primeira frase cabe, ele **recusa** como
+  o default: zero redação não é redação parcial, e nenhum rótulo tornaria isso aceitável.
+
+⚠️ `chars_nao_lidos` é **piso** de exposição, não medida dela: a redação é pelo texto do
+span sobre o original inteiro, então nome achado no prefixo também é apagado onde reaparece
+na cauda.
+
 ### 2.5 Variáveis de ambiente
 
 | variável | default | o que faz |
 |---|---|---|
 | `ANONY_CONTEXTO` | `documento` | `frase` volta ao modo antigo (predição por sentença isolada). Custa 31 pontos de recall — ver o comentário em `app/main.py`. |
 | `ANONY_TIMEOUT_S` | `0` (desligado) | Orçamento de tempo por requisição, em segundos. Ver 2.4. |
+| `ANONY_ORCAMENTO` | `recusa` | O que fazer com o texto que não cabe. `parcial` redige o prefixo que cabe e devolve o resto como original, com 200 rotulado. Ver 2.4.1. |
 | `ANONY_MAX_TIME` | `20` | Teto do modo `frase`. **O nome diz tempo e o efeito é tamanho**: o corte cai por volta de `valor × 100` caracteres. Só tem efeito com `ANONY_CONTEXTO=frase`. |
 | `ANONY_FILTROS` | `0` | `1` aplica os filtros de confiança e forma de nome do runtime. |
 | `ANONY_THREADS` | `0` (todas) | Threads do onnxruntime. |
@@ -106,7 +147,8 @@ do boot passa e é ela que ensina a vazão à instalação.
 
 No modo `frase`, se o teto cortar antes de ler o texto inteiro a resposta é **413**, não um
 200 com o texto meio-redigido: trecho não lido é nome não redigido, e o cliente gravaria o
-vazamento sem nada acusar.
+vazamento sem nada acusar. Com `ANONY_ORCAMENTO=parcial` ela vira um 200 **rotulado**
+(`redacao: "parcial"`) — o que continua não existindo é o 200 calado.
 
 ### 2.6 Development
 

@@ -7,7 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette import status
 
-from orcamento import Medidor, cabe_no_orcamento, motivo_recusa
+from orcamento import (
+    Medidor,
+    aviso_parcial,
+    cabe_no_orcamento,
+    chars_que_cabem,
+    frases_que_cabem,
+    motivo_recusa,
+)
 
 # Teto do modo `frase`. O nome diz tempo e o efeito e TAMANHO: no guard la embaixo o termo
 # `sent_length` (chars/100) domina o de relogio, entao o corte cai por volta de
@@ -21,6 +28,17 @@ MAX_TIME = float(os.environ.get("ANONY_MAX_TIME", "20"))
 # Ajuste este valor junto com o Read Timeout do `InvokeHTTP`, e sempre ABAIXO dele: o
 # orcamento cobre a inferencia, e a rede e a serializacao ainda vem por cima.
 TIMEOUT_S = float(os.environ.get("ANONY_TIMEOUT_S", "0"))
+
+# O que fazer com o texto que NAO cabe no orcamento. `recusa` (default) mantem o
+# comportamento de sempre: 413, nada processado. `parcial` le o prefixo que cabe, redige so
+# ele e devolve o resto como original, com 200 e com o quanto ficou por ler DITO na
+# resposta — para o cliente que nao consegue reprocessar a nota recusada e prefere evolucao
+# meio redigida a evolucao nenhuma. O racional e o piso ("nem a primeira frase cabe" ainda
+# recusa) estao em `app/orcamento.py`. Sem `ANONY_TIMEOUT_S` nao ha orcamento a exceder e
+# esta chave nao muda nada no modo `documento`.
+ORCAMENTO = os.environ.get("ANONY_ORCAMENTO", "recusa")
+PARCIAL = ORCAMENTO == "parcial"
+
 medidor = Medidor()
 
 # O modelo agora e ONNX e roda sem flair, sem torch e sem CUDA. O pacote baixado no build
@@ -194,6 +212,7 @@ def versao():
         "filtros": FILTROS,
         "max_time": MAX_TIME,
         "timeout_s": TIMEOUT_S,
+        "orcamento": ORCAMENTO,
         # A vazao MEDIDA nesta maquina: e o unico numero que diz o que esta instalacao
         # aguenta, e nao ha como saber de fora sem ele. `null` = ainda sem amostra.
         "vazao_chars_s": round(medidor.vazao) if medidor.vazao else None,
@@ -232,27 +251,45 @@ def get_clean_text(payload: dict = Body(...)):
         # o cliente teria depois de esperar o timeout inteiro — porem dito, e sem queimar a
         # CPU da box num pedido que ninguem mais espera.
         estimativa = medidor.estimativa(len(plain_text))
+        frases_lidas = sents_words
+        nao_lidos = 0
+        aviso = None
         if not cabe_no_orcamento(len(plain_text), estimativa, TIMEOUT_S):
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": motivo_recusa(
-                        len(plain_text), estimativa, TIMEOUT_S, medidor.vazao
-                    ),
-                    "chars": len(plain_text),
-                    "estimativa_s": round(estimativa, 1),
-                    "timeout_s": TIMEOUT_S,
-                },
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            # `frases_que_cabem` devolve 0 quando nem a primeira frase cabe. Ali nao ha
+            # redacao parcial a entregar, e um 200 com o texto INTEIRO em claro seria o
+            # vazamento silencioso que o 413 existe para nao produzir — entao o piso do modo
+            # `parcial` e recusar igual ao default.
+            cabem = (
+                frases_que_cabem(sents_words, chars_que_cabem(medidor.vazao, TIMEOUT_S))
+                if PARCIAL
+                else 0
             )
+            if cabem == 0:
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "message": motivo_recusa(
+                            len(plain_text), estimativa, TIMEOUT_S, medidor.vazao
+                        ),
+                        "chars": len(plain_text),
+                        "estimativa_s": round(estimativa, 1),
+                        "timeout_s": TIMEOUT_S,
+                    },
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                )
+            # So o prefixo entra na inferencia. O que sobrou e contado pelas frases que
+            # ficaram de fora, NUNCA por diferenca de `len()` contra o texto rejuntado: o
+            # join normaliza espaco e faria um texto lido inteiro sair rotulado "parcial".
+            frases_lidas = sents_words[:cabem]
+            nao_lidos = sum(len(f) for f in sents_words[cabem:])
+            aviso = aviso_parcial(nao_lidos, len(plain_text), TIMEOUT_S, medidor.vazao)
 
         start = time.time()
         spans = []
         sent_length = 0
-        nao_lidos = 0
 
         if CONTEXTO == "frase":
-            for s in sents_words:
+            for s in frases_lidas:
                 sent_length += len(s) / 100
                 # Orcamento do modo antigo, mantido so como rollback. Ele NAO e um limite de
                 # tempo: `sent_length` cresce com o TAMANHO do texto e domina o termo de
@@ -264,27 +301,38 @@ def get_clean_text(payload: dict = Body(...)):
                 else:
                     nao_lidos += len(s)
         else:
-            spans = achados(pacote.spans_do_texto(plain_text, plain=plain_text))
+            # Uma chamada so, com contexto de documento — o corte do modo `parcial` e
+            # ANTERIOR a inferencia, nao uma reparticao dentro dela (que e o que a secao
+            # "Por que estimar, e nao interromper no meio" do orcamento recusa).
+            lido = " ".join(frases_lidas) if nao_lidos else plain_text
+            spans = achados(pacote.spans_do_texto(lido, plain=lido))
 
         # `len - nao_lidos`: no modo `frase` truncado, creditar o texto inteiro a um tempo
         # que so cobriu parte dele inflaria a vazao — e vazao inflada e recusa que nao
         # acontece, ou seja o orcamento deixaria de proteger justamente sob carga.
         medidor.registra(len(plain_text) - nao_lidos, time.time() - t0)
 
-        # Trecho nao lido = nome nao redigido. Devolver 200 com o texto meio-redigido e o
-        # mecanismo exato dos 519 nomes da tabela la em cima: o cliente grava, e nada no
-        # monitoramento acusa. Falha visivel (o cliente descarta e reprocessa) e pior para o
-        # dado e melhor para o paciente que vazamento silencioso.
-        if nao_lidos:
+        # Trecho nao lido = nome nao redigido, e e por isso que o DEFAULT recusa: um 200
+        # mudo com texto meio-redigido e o mecanismo exato dos 519 nomes da tabela la em
+        # cima — o cliente grava e nada no monitoramento acusa. `ANONY_ORCAMENTO=parcial`
+        # troca a recusa por um 200 que DIZ o que ficou por ler; o que continua nao
+        # existindo e o 200 calado.
+        # `aviso is None` porque o corte do prefixo (acima) ja explicou a causa certa:
+        # com `frase` E `ANONY_TIMEOUT_S` os dois cortam, e a mensagem do MAX_TIME
+        # sozinha mandaria mexer no knob errado.
+        if nao_lidos and CONTEXTO == "frase" and aviso is None:
+            aviso = (
+                f"orcamento do modo frase cortou {nao_lidos} de {len(plain_text)} chars "
+                f"antes de ler: o texto redigido esta INCOMPLETO. "
+                f"Suba o ANONY_MAX_TIME (teto ~= valor * 100 chars) "
+                f"ou use ANONY_CONTEXTO=documento, que nao tem este corte."
+            )
+
+        if nao_lidos and not PARCIAL:
             return JSONResponse(
                 {
                     "status": "error",
-                    "message": (
-                        f"orcamento do modo frase cortou {nao_lidos} de {len(plain_text)} chars "
-                        f"antes de ler: o texto redigido estaria INCOMPLETO. "
-                        f"Suba o ANONY_MAX_TIME (teto ~= valor * 100 chars) "
-                        f"ou use ANONY_CONTEXTO=documento, que nao tem este corte."
-                    ),
+                    "message": aviso,
                     "chars": len(plain_text),
                     "chars_nao_lidos": nao_lidos,
                     "max_time": MAX_TIME,
@@ -292,25 +340,36 @@ def get_clean_text(payload: dict = Body(...)):
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
 
+        # A redacao e por TEXTO do span, sobre o original inteiro: nome achado no prefixo
+        # lido tambem e apagado onde reaparece no trecho nao lido. Entao `chars_nao_lidos` e
+        # piso de exposicao, nao medida dela — nao usar como estimativa de vazamento.
         clean_text = remove_ner(spans, original_text)
 
         cargo = payload.get("cargo", payload.get("CARGO", ""))
         if preserve_context and cargo in preserve_context:
             clean_text = restore_context(clean_text, original_text)
 
-        return JSONResponse(
-            {
-                "status": "success",
-                "fkevolucao": payload.get("fkevolucao", payload.get("FKEVOLUCAO", "1234")),
-                "dtevolucao": payload.get("dtevolucao", payload.get("DTEVOLUCAO", "2021-01-01")),
-                "cargo": payload.get("cargo", payload.get("CARGO", "cargo")),
-                "prescritor": payload.get("nome", payload.get("NOME", "nome")),
-                "nratendimento": payload.get("nratendimento", payload.get("NRATENDIMENTO", "1234")),
-                "texto": clean_text,
-                "total": len(sents_words),
-            },
-            status_code=status.HTTP_200_OK,
-        )
+        corpo = {
+            "status": "success",
+            "fkevolucao": payload.get("fkevolucao", payload.get("FKEVOLUCAO", "1234")),
+            "dtevolucao": payload.get("dtevolucao", payload.get("DTEVOLUCAO", "2021-01-01")),
+            "cargo": payload.get("cargo", payload.get("CARGO", "cargo")),
+            "prescritor": payload.get("nome", payload.get("NOME", "nome")),
+            "nratendimento": payload.get("nratendimento", payload.get("NRATENDIMENTO", "1234")),
+            "texto": clean_text,
+            "total": len(sents_words),
+        }
+        if nao_lidos:
+            # Campos extras SO no parcial. No caminho feliz a resposta segue identica a de
+            # sempre: `put-db-record-unmatched-field-behavior` do PutDatabaseRecord pode
+            # estar em "Fail on Unmatched Fields" em algum cliente, e nao se paga quebrar a
+            # nota que ja funcionava para rotular a que, sem isto, estaria perdida.
+            corpo["redacao"] = "parcial"
+            corpo["chars_nao_lidos"] = nao_lidos
+            corpo["chars_total"] = len(plain_text)
+            corpo["aviso"] = aviso
+
+        return JSONResponse(corpo, status_code=status.HTTP_200_OK)
 
     except Exception as e:
         return JSONResponse(
