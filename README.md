@@ -85,13 +85,22 @@ decide o que fazer com o texto que não caberia no orçamento — por padrão, r
 docker run -d --name myanony -e ANONY_TIMEOUT_S=12 -p 80:80 anony
 ```
 
-Ajuste-o **abaixo** do Read Timeout do cliente — o orçamento cobre a inferência, e rede e
-serialização ainda vêm por cima. Sem a variável (default `0`) nada é recusado, que é o
-comportamento anterior. A recusa sai como **HTTP 413** com `chars`, `estimativa_s` e
-`timeout_s` no corpo.
+**Vem ligado, em 13 s** — como o `ANONY_MAX_TIME`, é um default e não um opt-in. 13 e não
+15 porque o orçamento cobre a inferência, e rede e serialização ainda vêm por cima; ajuste-o
+junto com o Read Timeout do cliente e sempre **abaixo** dele. `ANONY_TIMEOUT_S=0` desliga,
+para quem chama o `/clean` de outro lugar.
 
-Enquanto não houver nenhuma amostra medida, nada é recusado: a primeira nota longa depois
-do boot passa e é ela que ensina a vazão à instalação.
+Enquanto não houver nenhuma amostra medida, nada é cortado: a primeira nota longa depois do
+boot passa inteira e é ela que ensina a vazão à instalação. ⚠️ O preço é que essa primeira
+nota pode estourar o cliente — é o buraco que só um teto de relógio fecharia.
+
+⚠️ **O orçamento modela a inferência do prefixo, não o pedido inteiro.** Preparo do texto,
+`remove_ner` e serialização crescem com o texto **total** e nenhum corte de prefixo os evita.
+Medido numa máquina de ~1.150 chars/s com `ANONY_TIMEOUT_S=13`: 13,8 s de parede em 41 mil
+chars, 14,2 s em 82 mil, 14,6 s em 161 mil e **16,2 s em 320 mil**. Contra um Read Timeout de
+15 s, 13 s seguram até a casa dos 150 mil chars de texto total; acima disso a nota se perde
+como se perdia antes — só que em ~15 s em vez de horas, e com a vazão medida caindo, o que
+aperta o orçamento sozinho.
 
 ### 2.4.1 Recusar ou redigir só o que cabe (`ANONY_ORCAMENTO`)
 
@@ -101,13 +110,15 @@ auto-termina o `Failure`, cursor que não volta), isso é perda definitiva de ev
 clínica. Medido em 02/09/2026 numa box de hospital: **175 notas descartadas em 26 h**, todas
 as longas, sem fila para inspecionar.
 
-`ANONY_ORCAMENTO=parcial` dá a outra escolha:
+Por isso o default é **`parcial`**. `ANONY_ORCAMENTO=recusa` volta ao 413 com nada
+processado, para quem prefere não gravar nota meio redigida e **consegue** reprocessar a
+recusada:
 
 ```
-docker run -d --name myanony -e ANONY_TIMEOUT_S=12 -e ANONY_ORCAMENTO=parcial -p 80:80 anony
+docker run -d --name myanony -e ANONY_ORCAMENTO=recusa -p 80:80 anony
 ```
 
-Ele lê o **prefixo que cabe**, redige esse prefixo e devolve o resto como no original, com
+O parcial lê o **prefixo que cabe**, redige esse prefixo e devolve o resto como no original, com
 **200** e com o quanto ficou por ler dito na resposta:
 
 ```json
@@ -126,8 +137,16 @@ Três coisas que ele **não** é:
 - **Não é silencioso.** Os campos `redacao`, `chars_nao_lidos`, `chars_total` e `aviso`
   aparecem **só** quando houve corte — no caminho feliz a resposta é idêntica à de sempre,
   para não quebrar cliente com `Fail on Unmatched Fields` no `PutDatabaseRecord`.
-- **Não devolve texto inteiro em claro.** Se nem a primeira frase cabe, ele **recusa** como
-  o default: zero redação não é redação parcial, e nenhum rótulo tornaria isso aceitável.
+- **Não devolve texto inteiro em claro.** Se nem a primeira frase cabe, ele **recusa** com
+  413: zero redação não é redação parcial, e nenhum rótulo tornaria isso aceitável. Medido
+  num cliente de notas longas (833 notas acima do orçamento numa semana), a primeira frase
+  tem mediana de 164 chars e máximo de 1.582 — o piso não chegou a disparar.
+
+⚠️ A troca do parcial é **perda silenciosa por redação parcial declarada**, não redação
+completa por parcial. Mas há uma faixa em que ela é no outro sentido: nota cuja inferência
+levaria entre o `ANONY_TIMEOUT_S` e o Read Timeout do cliente (13 s e 15 s nos defaults)
+hoje é escrita inteira redigida e passa a sair parcial. Quem não aceita isso põe
+`ANONY_ORCAMENTO=recusa`, ou sobe os dois tetos juntos.
 
 ⚠️ `chars_nao_lidos` é **piso** de exposição, não medida dela: a redação é pelo texto do
 span sobre o original inteiro, então nome achado no prefixo também é apagado onde reaparece
@@ -152,8 +171,8 @@ que diz o que a instalação aguenta (`null` = ainda sem amostra).
 | variável | default | o que faz |
 |---|---|---|
 | `ANONY_CONTEXTO` | `documento` | `frase` volta ao modo antigo (predição por sentença isolada). Custa 31 pontos de recall — ver o comentário em `app/main.py`. |
-| `ANONY_TIMEOUT_S` | `0` (desligado) | Orçamento de tempo por requisição, em segundos. Ver 2.4. |
-| `ANONY_ORCAMENTO` | `recusa` | O que fazer com o texto que não cabe. `parcial` redige o prefixo que cabe e devolve o resto como original, com 200 rotulado. Ver 2.4.1. |
+| `ANONY_TIMEOUT_S` | `13` | Orçamento de tempo por requisição, em segundos. `0` desliga. Ver 2.4. |
+| `ANONY_ORCAMENTO` | `parcial` | O que fazer com o texto que não cabe: redige o prefixo que cabe e devolve o resto como original, com 200 rotulado. `recusa` volta ao 413. Ver 2.4.1. |
 | `ANONY_MAX_TIME` | `20` | Teto do modo `frase`. **O nome diz tempo e o efeito é tamanho**: o corte cai por volta de `valor × 100` caracteres. Só tem efeito com `ANONY_CONTEXTO=frase`. |
 | `ANONY_FILTROS` | `0` | `1` aplica os filtros de confiança e forma de nome do runtime. |
 | `ANONY_THREADS` | `0` (todas) | Threads do onnxruntime. |

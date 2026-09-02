@@ -28,7 +28,7 @@ existe para fazer. Entao a decisao e na porta: se a estimativa nao cabe, recusa 
 milissegundos, sem comecar. O cliente recebe o mesmo desfecho que receberia (nota nao
 escrita), so que **em 5 ms em vez de 25 s, e com o motivo dito em vez de um timeout mudo**.
 
-## O que fazer quando nao cabe: `recusa` (default) ou `parcial`
+## O que fazer quando nao cabe: `parcial` (default) ou `recusa`
 
 Recusar entrega o desfecho certo para o PACIENTE (nada meio-redigido e gravado) e o errado
 para o DADO: a nota nao existe. Onde o cliente nao consegue reprocessar — flow que
@@ -36,9 +36,21 @@ auto-termina o `Failure` e cursor que nao volta —, isso e perda definitiva de 
 clinica. Medido em 2026-09-02 numa box de hospital: 175 notas descartadas em 26 h, todas as
 longas, sem fila para inspecionar.
 
-`ANONY_ORCAMENTO=parcial` da a quem opera a outra escolha: le o prefixo que cabe, redige
-esse prefixo e devolve o resto como original, com **200** e com o quanto ficou por ler dito
-na resposta. Ele NAO e o modo `frase` de volta. Sao tres diferencas, e as tres importam:
+O default e `parcial`: le o prefixo que cabe, redige esse prefixo e devolve o resto como
+original, com **200** e com o quanto ficou por ler dito na resposta. `ANONY_ORCAMENTO=recusa`
+volta ao 413 com nada processado, para quem prefere nao gravar nota meio redigida e
+CONSEGUE reprocessar a recusada.
+
+Ele e o default porque a alternativa real, na frota, nao e "nota inteira redigida": e nota
+nenhuma. Sem orcamento o texto longo estoura o Read Timeout do cliente e o flow descarta o
+flowfile sem registrar nada. O que o parcial troca, entao, e **perda silenciosa por redacao
+parcial declarada** — e nao redacao completa por redacao parcial.
+
+⚠️ Ha uma faixa em que a troca e no outro sentido: nota cuja inferencia levaria entre o
+`ANONY_TIMEOUT_S` e o Read Timeout do cliente (13 s e 15 s nos defaults) hoje e escrita
+INTEIRA redigida, e passa a sair parcial. A faixa e estreita e a estimativa erra para o lado
+de cortar cedo, entao ela existe; quem nao a aceita poe `ANONY_ORCAMENTO=recusa` e volta ao
+comportamento anterior — ou sobe os dois tetos juntos. Ele NAO e o modo `frase` de volta. Sao tres diferencas, e as tres importam:
 
 1. **O corte e medido, nao constante.** `chars_que_cabem` e o inverso exato de
    `cabe_no_orcamento`, entao o prefixo lido e o maximo que a recusa teria aceitado naquela
@@ -55,6 +67,30 @@ na resposta. Ele NAO e o modo `frase` de volta. Sao tres diferencas, e as tres i
 E ha um piso: se nem a primeira frase cabe, `parcial` **recusa** como o default. Um 200 com
 o texto inteiro em claro nao e redacao parcial, e nenhum rotulo o torna aceitavel.
 
+## O teto do orcamento, e onde ele deixa de segurar
+
+O orcamento modela a INFERENCIA do prefixo. O pedido paga, alem dela, um custo que cresce
+com o texto INTEIRO e que nenhum corte de prefixo evita: `replace_breaklines`,
+`remove_html_tags` (BeautifulSoup), `sent_tokenize`, o `remove_ner` (uma passada de regex
+por span sobre o original todo) e a serializacao da resposta. Medido em 02/09/2026 numa
+maquina de ~1.150 chars/s, com `ANONY_TIMEOUT_S=13` e prefixo praticamente constante:
+
+    texto total     parede
+     13.920 chars    12,1 s   (coube inteiro)
+     41.220          13,8 s
+     81.660          14,2 s
+    161.160          14,6 s
+    320.340          16,2 s
+
+Ou seja 13 s de orcamento seguram a parede abaixo dos 15 s do cliente ate a casa dos
+150 mil chars de texto total; acima disso o custo de texto inteiro sozinho passa do teto, e
+escolher outro prefixo nao muda isso. Nessa faixa a nota se perde como se perdia antes — a
+diferenca e que o servico gasta ~15 s em vez de horas, e o `vazao_chars_s` do /versao cai,
+apertando o orcamento sozinho.
+
+Fechar isso pede modelar o custo de texto inteiro (ou um teto de RELOGIO, janelando a
+inferencia), e nao um numero diferente aqui.
+
 ## Por que a vazao e medida, e nao configurada
 
 Sao ~120 boxes com CPUs que vao do E5420 (2007) ao Xeon Silver 4514Y. Um teto em
@@ -68,11 +104,15 @@ seria puxada pelos textos curtos e deixaria passar o texto longo que estoura. Re
 a queda e devagar a subida erra para o lado de recusar cedo demais, que custa uma nota
 descartada; o erro oposto custa o laco de reprocessamento descrito acima.
 
-## Sem medicao, nao se recusa
+## Sem medicao, nao se corta
 
-Enquanto nao houver nenhuma amostra, `estimativa()` devolve `None` e o pedido **passa**.
-Recusar por um numero que ninguem mediu seria inventar o numero — e a primeira chamada apos
-o boot e exatamente quando ele nao existe.
+Enquanto nao houver nenhuma amostra, `estimativa()` devolve `None` e o pedido **passa
+inteiro**. Cortar por um numero que ninguem mediu seria inventar o numero — e a primeira
+chamada apos o boot e exatamente quando ele nao existe.
+
+⚠️ O preco disso e que a primeira nota longa depois de cada recreate do container roda sem
+teto e pode estourar o cliente. E o buraco que so um teto de RELOGIO fecha (janelar a
+inferencia e conferir o tempo entre as janelas); a estimativa, por construcao, nao o fecha.
 """
 
 # Anotacoes preguicosas: o servico roda em 3.13, mas o teste deste modulo tem de rodar

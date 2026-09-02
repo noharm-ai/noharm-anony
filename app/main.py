@@ -23,20 +23,25 @@ from orcamento import (
 # como "teto de ~2.000 caracteres".
 MAX_TIME = float(os.environ.get("ANONY_MAX_TIME", "20"))
 
-# Paciencia do CLIENTE, em segundos. Zero (default) desliga. Ver `app/orcamento.py` para o
-# porque de estimar em vez de interromper, e por que a vazao e medida em vez de configurada.
-# Ajuste este valor junto com o Read Timeout do `InvokeHTTP`, e sempre ABAIXO dele: o
-# orcamento cobre a inferencia, e a rede e a serializacao ainda vem por cima.
-TIMEOUT_S = float(os.environ.get("ANONY_TIMEOUT_S", "0"))
+# Paciencia do CLIENTE, em segundos. **Ligado por default**, como o `MAX_TIME` acima: sem
+# orcamento, o texto que passa do Read Timeout do `InvokeHTTP` (15 s em 86 de 92
+# processadores medidos) e descartado pelo cliente em SILENCIO, e nenhuma instalacao escolheu
+# isso — era so o que acontecia. `0` desliga, para quem chama o /clean de outro lugar.
+#
+# 13 s e nao 15: o orcamento cobre a inferencia, e rede e serializacao ainda vem por cima.
+# Ajuste junto com o Read Timeout do cliente, e sempre ABAIXO dele. Ver `app/orcamento.py`
+# para por que estimar em vez de interromper, e por que a vazao e medida.
+TIMEOUT_S = float(os.environ.get("ANONY_TIMEOUT_S", "13"))
 
-# O que fazer com o texto que NAO cabe no orcamento. `recusa` (default) mantem o
-# comportamento de sempre: 413, nada processado. `parcial` le o prefixo que cabe, redige so
-# ele e devolve o resto como original, com 200 e com o quanto ficou por ler DITO na
-# resposta — para o cliente que nao consegue reprocessar a nota recusada e prefere evolucao
-# meio redigida a evolucao nenhuma. O racional e o piso ("nem a primeira frase cabe" ainda
-# recusa) estao em `app/orcamento.py`. Sem `ANONY_TIMEOUT_S` nao ha orcamento a exceder e
-# esta chave nao muda nada no modo `documento`.
-ORCAMENTO = os.environ.get("ANONY_ORCAMENTO", "recusa")
+# O que fazer com o texto que NAO cabe no orcamento. **`parcial` por default**: le o prefixo
+# que cabe, redige so ele e devolve o resto como original, com 200 e com o quanto ficou por
+# ler DITO na resposta. `recusa` volta ao 413 com nada processado, para quem prefere nao
+# gravar nota meio redigida e CONSEGUE reprocessar a recusada.
+#
+# O default e `parcial` porque a alternativa real nao e "nota inteira redigida", e sim nota
+# nenhuma: o flow auto-termina o `Failure` do InvokeHTTP e o cursor nao volta. O piso ("nem
+# a primeira frase cabe" ainda recusa) e o racional estao em `app/orcamento.py`.
+ORCAMENTO = os.environ.get("ANONY_ORCAMENTO", "parcial")
 PARCIAL = ORCAMENTO == "parcial"
 
 medidor = Medidor()
@@ -269,6 +274,12 @@ def get_clean_text(payload: dict = Body(...)):
         frases_lidas = sents_words
         nao_lidos = 0
         aviso = None
+        # Chars que de fato vao ao modelo — e nao `len(plain_text) - nao_lidos`, que joga
+        # TODO o espaco entre frases do documento para o lado lido e por isso INFLA a vazao
+        # medida. Vazao inflada e orcamento maior, orcamento maior e mais texto lido: o erro
+        # se realimenta. Medido antes do conserto: o mesmo prefixo de ~16 mil chars subia
+        # para 18 mil conforme o texto total crescia de 43 mil para 174 mil.
+        chars_inferidos = len(plain_text)
         if not cabe_no_orcamento(len(plain_text), estimativa, TIMEOUT_S):
             # `frases_que_cabem` devolve 0 quando nem a primeira frase cabe. Ali nao ha
             # redacao parcial a entregar, e um 200 com o texto INTEIRO em claro seria o
@@ -297,6 +308,7 @@ def get_clean_text(payload: dict = Body(...)):
             # join normaliza espaco e faria um texto lido inteiro sair rotulado "parcial".
             frases_lidas = sents_words[:cabem]
             nao_lidos = sum(len(f) for f in sents_words[cabem:])
+            chars_inferidos = sum(len(f) for f in frases_lidas)
             aviso = aviso_parcial(nao_lidos, len(plain_text), TIMEOUT_S, medidor.vazao)
 
         start = time.time()
@@ -304,6 +316,7 @@ def get_clean_text(payload: dict = Body(...)):
         sent_length = 0
 
         if CONTEXTO == "frase":
+            chars_inferidos = 0
             for s in frases_lidas:
                 sent_length += len(s) / 100
                 # Orcamento do modo antigo, mantido so como rollback. Ele NAO e um limite de
@@ -313,6 +326,7 @@ def get_clean_text(payload: dict = Body(...)):
                 # tabela em `CONTEXTO`, acima.
                 if (time.time() - start + sent_length) < MAX_TIME:
                     spans.extend(achados(pacote.spans_do_texto(s, plain=s)))
+                    chars_inferidos += len(s)
                 else:
                     nao_lidos += len(s)
         else:
@@ -320,12 +334,14 @@ def get_clean_text(payload: dict = Body(...)):
             # ANTERIOR a inferencia, nao uma reparticao dentro dela (que e o que a secao
             # "Por que estimar, e nao interromper no meio" do orcamento recusa).
             lido = " ".join(frases_lidas) if nao_lidos else plain_text
+            chars_inferidos = len(lido)
             spans = achados(pacote.spans_do_texto(lido, plain=lido))
 
-        # `len - nao_lidos`: no modo `frase` truncado, creditar o texto inteiro a um tempo
-        # que so cobriu parte dele inflaria a vazao — e vazao inflada e recusa que nao
-        # acontece, ou seja o orcamento deixaria de proteger justamente sob carga.
-        medidor.registra(len(plain_text) - nao_lidos, time.time() - t0)
+        # Creditar o texto inteiro a um tempo que so cobriu parte dele inflaria a vazao — e
+        # vazao inflada e corte que nao acontece, ou seja o orcamento deixaria de proteger
+        # justamente sob carga. O relogio e o do pedido INTEIRO de proposito: e a parede que
+        # o cliente ve, e nao so a inferencia.
+        medidor.registra(chars_inferidos, time.time() - t0)
 
         # Trecho nao lido = nome nao redigido, e e por isso que o DEFAULT recusa: um 200
         # mudo com texto meio-redigido e o mecanismo exato dos 519 nomes da tabela la em
