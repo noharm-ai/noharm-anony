@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette import status
 
+from redacao import redige
 from orcamento import (
     Medidor,
     aviso_parcial,
@@ -79,6 +80,12 @@ from anony_onnx_runtime import Pacote  # noqa: E402
 # `ANONY_CONTEXTO=frase` volta ao comportamento anterior sem rebuild.
 CONTEXTO = os.environ.get("ANONY_CONTEXTO", "documento")
 FILTROS = os.environ.get("ANONY_FILTROS", "0") == "1"
+# Fallback da redacao, LIGADO por default. So age onde hoje nao acontece nada: span cuja
+# forma inteira nao casa no original — o caso do span que cruza uma tag HTML, porque o
+# modelo le o texto sem tags e as ve como espaco. Custo medido: 1,5 termo clinico redigido
+# por nome recuperado. `ANONY_REDACAO_PEDACOS=0` volta a so redigir a forma inteira. O
+# racional e os numeros estao em `app/redacao.py`.
+REDACAO_PEDACOS = os.environ.get("ANONY_REDACAO_PEDACOS", "1") == "1"
 THREADS = int(os.environ.get("ANONY_THREADS", "0")) or None
 
 
@@ -102,7 +109,7 @@ class PacoteFrase(Pacote):
 #
 # Suba isto em todo PR que mude o que o /clean DEVOLVE (campo novo, status diferente,
 # decisao nova). Mudanca so de dependencia ou de build nao precisa.
-SERVICO = "1.4"
+SERVICO = "1.5"
 
 app = FastAPI(title="NoHarm Anony API", version=SERVICO)
 
@@ -149,21 +156,20 @@ def is_rtf(text):
     return "{rtf" in text[:100].replace("\\", "")
 
 def remove_ner(spans, original_text) -> str:
-    """Mesma redacao de sempre: `\b...\b` com IGNORECASE sobre o texto original.
+    """Redacao por FORMA sobre o texto original — a decisao mora em `app/redacao.py`.
 
-    Nao foi mexido de proposito: trocar a forma da substituicao mudaria o texto entregue,
-    e o que esta em jogo nesta mudanca e so o motor de inferencia.
+    Ate o servico 1.4 o padrao era `\b + re.escape(span) + \b` montado aqui, e ele falhava
+    CALADO em duas familias: **espaco que nao e espaco** (NBSP entre as palavras do nome —
+    5 de 28 spans de producao numa amostra de 170 evolucoes reais, dois deles nome de
+    paciente) e **borda de pontuacao** (`Everton,`, `(  Rosangela`, que `\b` nunca casa). Nos
+    dois o modelo ACHAVA o nome e a redacao o descartava, sem nada no log.
+
+    Continua sendo por forma, com IGNORECASE, em todas as ocorrencias: o que mudou e que a
+    forma deixou de depender de qual espaco o hospital digitou. Numeros e limites conhecidos
+    (HTML no meio do nome segue sem casar) estao no modulo.
     """
     soup = BeautifulSoup(original_text, "html.parser")
-    replaced_text = str(soup)
-    for span in spans:
-        replaced_text = re.sub(
-            r"\b(" + re.escape(span) + r")\b",
-            "***",
-            replaced_text,
-            flags=re.IGNORECASE,
-        )
-    return replaced_text
+    return redige(spans, str(soup), por_pedacos=REDACAO_PEDACOS)
 
 def remove_accents(input_str):
     nfkd_form = unicodedata.normalize("NFKD", input_str)
@@ -230,6 +236,7 @@ def versao():
         "pacote": pacote.versao if pacote else None,
         "contexto": CONTEXTO,
         "filtros": FILTROS,
+        "redacao_pedacos": REDACAO_PEDACOS,
         "max_time": MAX_TIME,
         "timeout_s": TIMEOUT_S,
         "orcamento": ORCAMENTO,
