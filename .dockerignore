@@ -4,3 +4,9 @@ anony-latest.tar.gz
 *.tar.gz
 README.md
 LICENSE
+app/test_*.py
+
+# Teste nao entra na imagem de runtime. Alem de peso morto, ele carrega EXEMPLO —
+# e exemplo de defeito de anonimizacao nasce parecido com o dado que o causou. O CI
+# roda os testes na propria runner (`python3 app/test_*.py`), antes do build, entao
+# tira-los daqui nao afrouxa nada.
