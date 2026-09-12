@@ -21,6 +21,13 @@ jobs:
       - name: Testar orcamento de tempo
         run: python3 app/test_orcamento.py
 
+      # Mesma razao: `app/redacao.py` nao importa bs4, nltk nem o runtime, entao a decisao
+      # de COMO o span vira `***` e conferivel sem imagem. Ela ja falhou calada em tres
+      # familias (NBSP no meio do nome, borda de pontuacao, span cruzando tag) e cada uma
+      # esta amarrada por um caso real aqui.
+      - name: Testar a redacao do span
+        run: python3 app/test_redacao.py
+
       - name: Build Docker Image
         run: docker build -t anony .
       - name: Run Docker Image
