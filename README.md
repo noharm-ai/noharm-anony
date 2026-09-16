@@ -156,7 +156,8 @@ na cauda.
 
 ```
 $ curl -s http://localhost/versao
-{"servico":"1.4","pacote":"o1.3","contexto":"documento","filtros":false,
+{"servico":"1.6","pacote":"o1.3","contexto":"documento","filtros":false,
+ "redacao_pedacos":true,"plain":"espaco",
  "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
  "vazao_chars_s":983,"amostras":2406}
 ```
@@ -174,6 +175,7 @@ que diz o que a instalação aguenta (`null` = ainda sem amostra).
 | `ANONY_TIMEOUT_S` | `13` | Orçamento de tempo por requisição, em segundos. `0` desliga. Ver 2.4. |
 | `ANONY_ORCAMENTO` | `parcial` | O que fazer com o texto que não cabe: redige o prefixo que cabe e devolve o resto como original, com 200 rotulado. `recusa` volta ao 413. Ver 2.4.1. |
 | `ANONY_MAX_TIME` | `20` | Teto do modo `frase`. **O nome diz tempo e o efeito é tamanho**: o corte cai por volta de `valor × 100` caracteres. Só tem efeito com `ANONY_CONTEXTO=frase`. |
+| `ANONY_PLAIN` | `espaco` | Como o HTML vira o texto que o modelo lê. `espaco` troca cada tag por um espaço, igual ao runtime do pacote e ao job do servidor. `bs4` volta ao `get_text()` sem separador da 1.5, que **funde** o fim de um `<p>` no nome seguinte e deixava 84–89% dos nomes achados sem redação em dois hospitais. Ver 2.7. |
 | `ANONY_FILTROS` | `0` | `1` aplica os filtros de confiança e forma de nome do runtime. |
 | `ANONY_THREADS` | `0` (todas) | Threads do onnxruntime. |
 | `ANONY_PACOTE_DIR` | `/app/noharm-anony-onnx` | Onde o pacote do modelo foi extraído. |
@@ -182,6 +184,35 @@ No modo `frase`, se o teto cortar antes de ler o texto inteiro a resposta é **4
 200 com o texto meio-redigido: trecho não lido é nome não redigido, e o cliente gravaria o
 vazamento sem nada acusar. Com `ANONY_ORCAMENTO=parcial` ela vira um 200 **rotulado**
 (`redacao: "parcial"`) — o que continua não existindo é o 200 calado.
+
+### 2.7 O texto que o modelo lê (`ANONY_PLAIN`, serviço 1.6)
+
+Até a 1.5 o HTML virava texto por `soup.get_text()` **sem separador**. Isso apaga a fronteira
+entre dois elementos: `<p>ENFERMAGEM</p><p>Joana Pires, 74 anos</p>` chega ao modelo como
+`ENFERMAGEMJoana Pires, 74 anos`. O modelo ainda marca o nome, mas emite uma forma que não
+existe no HTML e a redação, que casa por forma sobre o original, não encontra nada. Quando o
+sobrenome sai como span separado ele é redigido e o primeiro nome colado sobrevive — o
+`Joana ***, 74 anos` visto em dois hospitais com o pacote mais novo instalado.
+
+Medido em 16/09/2026 sobre textos do dia, pacote o1.3, reproduzindo o `/clean` da 1.4 e da
+1.5 fora do hospital:
+
+| hospital | spans que o modelo acha | a 1.4 não redigia | por fusão de tag | a 1.5 recupera |
+|---|---|---|---|---|
+| A (180 textos) | 45 | 38 (84%) | 30 | 37 |
+| B (158 textos) | 37 | 33 (89%) | 28 | 32 |
+
+A 1.5 recupera quase tudo pelo fallback por pedaços, mas só o que ainda existe como palavra
+inteira: `ENFERMAGEMJoana` e `Lucas8a` não se decompõem. A 1.6 conserta na origem: cada tag
+vale um espaço, que é exatamente o `to_plain` do runtime do pacote e do job que redige a mesma
+coluna no servidor — o texto sobre o qual toda régua desta linha foi medida. O `get_text()` era
+o único caminho que o modelo via e ninguém media. Junto vem um conserto menor: o
+`replace_breaklines` antigo usava a classe `[\r?\n|\r]`, que também trocava `?` e `|` por
+`. ?` e `. |`.
+
+`ANONY_PLAIN=bs4` volta ao comportamento da 1.5 sem rebuild; o modo em uso sai no `/versao`.
+O serviço confere no arranque que a cópia local e o `to_plain` do runtime coincidem num
+canário, e recusa subir se divergirem.
 
 ### 2.6 Development
 

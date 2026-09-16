@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette import status
 
 from redacao import redige
+from preparo import CANARIO, plain_do_html
 from orcamento import (
     Medidor,
     aviso_parcial,
@@ -86,6 +87,14 @@ FILTROS = os.environ.get("ANONY_FILTROS", "0") == "1"
 # por nome recuperado. `ANONY_REDACAO_PEDACOS=0` volta a so redigir a forma inteira. O
 # racional e os numeros estao em `app/redacao.py`.
 REDACAO_PEDACOS = os.environ.get("ANONY_REDACAO_PEDACOS", "1") == "1"
+
+# O plain que o modelo le. Ate a 1.5 era `soup.get_text()` SEM separador, que funde o fim de
+# um elemento no comeco do outro (`ENFERMAGEMJoana Pires`): o modelo marca, a forma nao
+# existe no HTML, a redacao nao casa — 84-89% dos spans que o modelo achava em dois hospitais
+# com o pacote atual ficavam em claro. `espaco` (default) e o `to_plain` do runtime e do
+# anony-frota, o texto sobre o qual toda regua foi medida; `bs4` e o comportamento da 1.5.
+# Numeros e racional em `app/preparo.py`.
+PLAIN = os.environ.get("ANONY_PLAIN", "espaco")
 THREADS = int(os.environ.get("ANONY_THREADS", "0")) or None
 
 
@@ -109,7 +118,7 @@ class PacoteFrase(Pacote):
 #
 # Suba isto em todo PR que mude o que o /clean DEVOLVE (campo novo, status diferente,
 # decisao nova). Mudanca so de dependencia ou de build nao precisa.
-SERVICO = "1.5"
+SERVICO = "1.6"
 
 app = FastAPI(title="NoHarm Anony API", version=SERVICO)
 
@@ -132,6 +141,15 @@ def load_model():
     # `.onnx` prediz outra coisa sem nenhum sinal, e isso tem de derrubar o startup.
     pacote = classe.carrega(PACOTE_DIR, threads=THREADS)
     print(f"Done! versao {pacote.versao}", flush=True)
+    # `preparo.plain_do_html` e copia do `to_plain` do runtime (o CI nao tem pacote para
+    # importar). Se uma das duas mudar sozinha, o modelo passa a ler um texto que nenhuma
+    # regua mediu — entao isso e erro de arranque, nao aviso.
+    try:
+        from anony_onnx_runtime import to_plain
+    except ImportError:
+        to_plain = None
+    if to_plain is not None and to_plain(CANARIO) != plain_do_html(CANARIO):
+        raise SystemExit("preparo.plain_do_html diverge do to_plain do runtime no canario")
 
 def rtf_to_text(rtf_content, errors):
     with open("input.rtf", "w") as rtf_file:
@@ -151,6 +169,12 @@ def remove_html_tags(html):
 def replace_breaklines(text):
     clean = re.compile(r"([\r?\n|\r])")
     return re.sub(clean, r". \1", text)
+
+def plain_para_o_modelo(original_text):
+    """`espaco` (1.6): tag vale espaco, igual ao runtime; `bs4` (1.5): get_text() sem separador."""
+    if PLAIN == "bs4":
+        return remove_html_tags(replace_breaklines(original_text))
+    return plain_do_html(original_text)
 
 def is_rtf(text):
     return "{rtf" in text[:100].replace("\\", "")
@@ -237,6 +261,7 @@ def versao():
         "contexto": CONTEXTO,
         "filtros": FILTROS,
         "redacao_pedacos": REDACAO_PEDACOS,
+        "plain": PLAIN,
         "max_time": MAX_TIME,
         "timeout_s": TIMEOUT_S,
         "orcamento": ORCAMENTO,
@@ -269,8 +294,7 @@ def get_clean_text(payload: dict = Body(...)):
             text = remove_accents(text)
             original_text = rtf_to_text(text, errors="ignore") or ""
 
-        plain_text = replace_breaklines(original_text)
-        plain_text = remove_html_tags(plain_text)
+        plain_text = plain_para_o_modelo(original_text)
         sents_words = sent_tokenize(plain_text)
 
         # Orcamento ANTES da inferencia: o preparo acima (rtf/html/tokenize) e barato, a
