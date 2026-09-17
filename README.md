@@ -188,11 +188,15 @@ vazamento sem nada acusar. Com `ANONY_ORCAMENTO=parcial` ela vira um 200 **rotul
 ### 2.7 O texto que o modelo lê (`ANONY_PLAIN`, serviço 1.6)
 
 Até a 1.5 o HTML virava texto por `soup.get_text()` **sem separador**. Isso apaga a fronteira
-entre dois elementos: `<p>ENFERMAGEM</p><p>Joana Pires, 74 anos</p>` chega ao modelo como
-`ENFERMAGEMJoana Pires, 74 anos`. O modelo ainda marca o nome, mas emite uma forma que não
+entre dois elementos: `<p>ENFERMAGEM</p><p>Fulana Beltrano, 74 anos</p>` chega ao modelo como
+`ENFERMAGEMFulana Beltrano, 74 anos`. O modelo ainda marca o nome, mas emite uma forma que não
 existe no HTML e a redação, que casa por forma sobre o original, não encontra nada. Quando o
 sobrenome sai como span separado ele é redigido e o primeiro nome colado sobrevive — o
-`Joana ***, 74 anos` visto em dois hospitais com o pacote mais novo instalado.
+`Fulana ***, 74 anos` visto em dois hospitais com o pacote mais novo instalado.
+
+Os nomes próprios dos exemplos desta seção e dos testes são **inventados** — do caso real
+se preserva só a *forma* do defeito (onde a tag cai, onde o nome funde, onde entra o NBSP),
+que é o que a régua mede.
 
 Medido em 16/09/2026 sobre textos do dia, pacote o1.3, reproduzindo o `/clean` da 1.4 e da
 1.5 fora do hospital:
@@ -203,7 +207,7 @@ Medido em 16/09/2026 sobre textos do dia, pacote o1.3, reproduzindo o `/clean` d
 | B (158 textos) | 37 | 33 (89%) | 28 | 32 |
 
 A 1.5 recupera quase tudo pelo fallback por pedaços, mas só o que ainda existe como palavra
-inteira: `ENFERMAGEMJoana` e `Lucas8a` não se decompõem. A 1.6 conserta na origem: cada tag
+inteira: `ENFERMAGEMFulana` e `Fulano8a` não se decompõem. A 1.6 conserta na origem: cada tag
 vale um espaço, que é exatamente o `to_plain` do runtime do pacote e do job que redige a mesma
 coluna no servidor — o texto sobre o qual toda régua desta linha foi medida. O `get_text()` era
 o único caminho que o modelo via e ninguém media. Junto vem um conserto menor: o

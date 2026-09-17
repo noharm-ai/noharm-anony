@@ -89,7 +89,7 @@ FILTROS = os.environ.get("ANONY_FILTROS", "0") == "1"
 REDACAO_PEDACOS = os.environ.get("ANONY_REDACAO_PEDACOS", "1") == "1"
 
 # O plain que o modelo le. Ate a 1.5 era `soup.get_text()` SEM separador, que funde o fim de
-# um elemento no comeco do outro (`ENFERMAGEMJoana Pires`): o modelo marca, a forma nao
+# um elemento no comeco do outro (`ENFERMAGEMFulana Beltrano`): o modelo marca, a forma nao
 # existe no HTML, a redacao nao casa — 84-89% dos spans que o modelo achava em dois hospitais
 # com o pacote atual ficavam em claro. `espaco` (default) e o `to_plain` do runtime e do
 # anony-frota, o texto sobre o qual toda regua foi medida; `bs4` e o comportamento da 1.5.
