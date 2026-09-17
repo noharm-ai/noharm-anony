@@ -1,12 +1,16 @@
 """O texto que vai ao modelo — e por que ele NAO e mais o `get_text()` do BeautifulSoup.
 
 Ate o servico 1.5 o plain era `soup.get_text()` SEM separador. Isso apaga a fronteira entre
-dois elementos: `<p>ENFERMAGEM</p><p>Joana Pires, 74 anos</p>` vira `ENFERMAGEMJoana Pires,
-81 anos`. O modelo ainda marca o nome, mas emite uma FORMA que nao existe no HTML
-(`ENFERMAGEMJoana Pires`, `Helena Duarte MachadoIdade`, `Lucas8a`), e a redacao — que
+dois elementos: `<p>ENFERMAGEM</p><p>Fulana Beltrano, 74 anos</p>` vira `ENFERMAGEMFulana
+Beltrano, 74 anos`. O modelo ainda marca o nome, mas emite uma FORMA que nao existe no HTML
+(`ENFERMAGEMFulana Beltrano`, `Sicrana Beltrano FulanoIdade`, `Fulano8a`), e a redacao — que
 casa por forma sobre o original — nao encontra nada. Quando o sobrenome sai como span
-separado ele e redigido e o primeiro nome colado sobrevive: e o `Joana ***, 74 anos` que
+separado ele e redigido e o primeiro nome colado sobrevive: e o `Fulana ***, 74 anos` que
 aparecia em dois hospitais com o pacote mais novo instalado.
+
+Os nomes proprios dos exemplos deste modulo (e dos testes) sao INVENTADOS. O que se
+preserva do caso real e so a FORMA do defeito — onde a tag cai, onde o nome funde, onde
+entra o NBSP —, que e o que a regua mede. Mesma convencao do `test_redacao.py`.
 
 Medido em 16/09/2026, textos do dia ainda sem redacao do servidor, pacote o1.3, reproduzindo
 o `/clean` da 1.4 e da 1.5 em maquina local:
@@ -16,7 +20,7 @@ o `/clean` da 1.4 e da 1.5 em maquina local:
   hospital B (158)      37               33 (89%)              28                32
 
 A 1.5 recupera quase tudo pelo fallback por pedacos, mas so o que ainda existe como palavra
-inteira no texto: `ENFERMAGEMJoana` e `Lucas8a` nao se decompoem. O conserto e na origem —
+inteira no texto: `ENFERMAGEMFulana` e `Fulano8a` nao se decompoem. O conserto e na origem —
 dar ao modelo um plain em que a tag vale um espaco.
 
 Esta funcao e **byte a byte** a `to_plain` do `anony_onnx_runtime.py` e do `anony-frota.py`
@@ -54,5 +58,5 @@ def plain_do_html(texto: str) -> str:
 # O canario que `main.py` roda contra o `to_plain` do runtime ao carregar o pacote: cobre
 # tag entre elementos, `<br/>`, entidade e quebra de linha. Divergir aqui e sinal de que uma
 # das duas copias mudou sozinha.
-CANARIO = ("<p>ENFERMAGEM</p><p><b>Joana</b>&nbsp;Pires, 81 anos.<br/>HAS &gt; 140\n"
+CANARIO = ("<p>ENFERMAGEM</p><p><b>Fulana</b>&nbsp;Beltrano, 74 anos.<br/>HAS &gt; 140\n"
            "Acompanhada?</p>")
