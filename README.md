@@ -156,7 +156,8 @@ na cauda.
 
 ```
 $ curl -s http://localhost/versao
-{"servico":"1.6","pacote":"o1.3","contexto":"documento","filtros":false,
+{"servico":"1.7","pacote":"o1.3","contexto":"documento","filtros":false,
+ "filtros_modo":"blocklist","blocklist":130,"blocklist_extra":38,
  "redacao_pedacos":true,"plain":"espaco",
  "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
  "vazao_chars_s":983,"amostras":2406}
@@ -176,7 +177,7 @@ que diz o que a instalação aguenta (`null` = ainda sem amostra).
 | `ANONY_ORCAMENTO` | `parcial` | O que fazer com o texto que não cabe: redige o prefixo que cabe e devolve o resto como original, com 200 rotulado. `recusa` volta ao 413. Ver 2.4.1. |
 | `ANONY_MAX_TIME` | `20` | Teto do modo `frase`. **O nome diz tempo e o efeito é tamanho**: o corte cai por volta de `valor × 100` caracteres. Só tem efeito com `ANONY_CONTEXTO=frase`. |
 | `ANONY_PLAIN` | `espaco` | Como o HTML vira o texto que o modelo lê. `espaco` troca cada tag por um espaço, igual ao runtime do pacote e ao job do servidor. `bs4` volta ao `get_text()` sem separador da 1.5, que **funde** o fim de um `<p>` no nome seguinte e deixava 84–89% dos nomes achados sem redação em dois hospitais. Ver 2.7. |
-| `ANONY_FILTROS` | `0` | `1` aplica os filtros de confiança e forma de nome do runtime. |
+| `ANONY_FILTROS` | `blocklist` | Deixa de redigir só a forma que está na blocklist (a do pacote unida a `app/blocklist.txt`), sem corte de confiança e sem exigência de maiúscula. `0` volta ao comportamento da 1.6: redige tudo que o modelo marca. `1` aplica também os filtros de confiança e forma de nome do runtime, e com isso deixa de redigir nome escrito todo em minúscula. Ver 2.8. |
 | `ANONY_THREADS` | `0` (todas) | Threads do onnxruntime. |
 | `ANONY_PACOTE_DIR` | `/app/noharm-anony-onnx` | Onde o pacote do modelo foi extraído. |
 
@@ -217,6 +218,36 @@ o único caminho que o modelo via e ninguém media. Junto vem um conserto menor:
 `ANONY_PLAIN=bs4` volta ao comportamento da 1.5 sem rebuild; o modo em uso sai no `/versao`.
 O serviço confere no arranque que a cópia local e o `to_plain` do runtime coincidem num
 canário, e recusa subir se divergirem.
+
+### 2.8 A blocklist e o modo `blocklist` (serviço 1.7)
+
+Por default o serviço redige **tudo** que o modelo marca. O pacote traz uma blocklist no
+`manifest.json` — a do job que redige a mesma coluna no servidor —, mas ela só agia com
+`ANONY_FILTROS=1`, que liga junto o corte de confiança e a exigência de maiúscula no span; o
+segundo custa recall (nome escrito todo em minúscula deixa de ser redigido), e por isso
+ninguém ligava.
+
+`ANONY_FILTROS=blocklist` separa as duas coisas: deixa de redigir **só** a forma cuja string
+inteira, em `casefold`, está na blocklist — a do manifesto unida a **`app/blocklist.txt`**,
+versionada neste repositório —, e continua redigindo todo o resto. Não é substring:
+`higiene` na lista não toca em `Higienópolis`.
+
+**De onde vem a lista.** Régua de produção de 17/09/2026: janela virgem, 1.976 spans
+arbitrados em cego, mais as 6.457 labels do corpus de treino. Cada forma do arquivo foi lida
+como não-nome em todas as ocorrências e nunca como nome, nos dois conjuntos; juntas cobrem
+**40% do falso positivo visível** do modelo em produção naquela janela — rótulo de campo de
+formulário (`Higiene Oral: : Sim`, `Eficacia`), escala clínica com epônimo, fármaco,
+material, parentesco, cortesia. São as mesmas formas que entraram na blocklist do job do
+servidor no mesmo dia.
+
+**O que pode estar no arquivo, porque este repositório é público:** forma de não-nome
+medida em produção. **O que não pode:** nada com leitura de nome de pessoa real, nem nome
+de hospital, cidade ou paciente — isso fica na lista do job, no servidor.
+`app/test_blocklist.py` segura as violações mais fáceis de cometer sem querer.
+
+O modo em uso e o tamanho da lista aplicada saem no `/versao` (`filtros_modo`, `blocklist`,
+`blocklist_extra`). **`blocklist` é o default desde a 1.7.** `ANONY_FILTROS=0` volta ao
+comportamento da 1.6 sem rebuild — redigir tudo que o modelo marca.
 
 ### 2.6 Development
 

@@ -1,0 +1,50 @@
+# Formas que o modelo marca como nome e que NÃO são nome de pessoa: rótulo de campo de
+# formulário, escala clínica com epônimo, fármaco, material, parentesco, cortesia.
+#
+# Procedência: régua 3 do anony de 17/09/2026 — janela virgem de produção, 1.976 spans
+# arbitrados em cego, mais as 6.457 labels do corpus de treino. Cada forma aqui foi lida
+# como NÃO-NOME em todas as ocorrências, e nunca como nome, nos dois conjuntos. Juntas
+# cobrem 40% do falso positivo visível do modelo em produção naquela janela.
+#
+# Regras deste arquivo: uma forma por linha, comparação por forma INTEIRA do span em
+# `casefold` (não é substring); nada que tenha leitura de nome de pessoa real; nada que
+# identifique hospital, cidade ou paciente. Variante com e sem acento entram as duas,
+# porque o texto de origem vem dos dois jeitos.
+eficacia
+eficácia
+higiene
+higiene oral
+higiene bronquica
+higiene brônquica
+rankin
+libero
+lucido
+lúcido
+lucida
+lúcida
+tutelar
+conselho tutelar
+research council
+calibre jelco
+calibre
+clavulin
+benzetacil
+grata
+grato
+ciclo sono
+ciclo sono vigilia
+ciclo sono vigília
+concilia ciclo
+concilia ciclo sono
+concilia ciclo sono vigilia
+concilia ciclo sono vigília
+sobrinha
+sobrinho
+turgor
+sedacao
+sedação
+audicao
+audição
+bronquite
+insonia
+insônia

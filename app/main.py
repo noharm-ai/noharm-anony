@@ -9,6 +9,7 @@ from starlette import status
 
 from redacao import redige
 from preparo import CANARIO, plain_do_html
+from blocklist import carrega as carrega_blocklist, filtra as filtra_blocklist
 from orcamento import (
     Medidor,
     aviso_parcial,
@@ -80,7 +81,21 @@ from anony_onnx_runtime import Pacote  # noqa: E402
 #
 # `ANONY_CONTEXTO=frase` volta ao comportamento anterior sem rebuild.
 CONTEXTO = os.environ.get("ANONY_CONTEXTO", "documento")
-FILTROS = os.environ.get("ANONY_FILTROS", "0") == "1"
+# Tres modos, e a diferenca entre eles e o que se DEIXA de redigir:
+#   `blocklist` (default desde a 1.7) — tudo, MENOS a forma que esta na blocklist (a do
+#                    manifesto do pacote unida a `app/blocklist.txt`). Sem corte de
+#                    confianca e sem exigencia de maiuscula: redige menos so onde a
+#                    medicao diz que nao havia nome (0 nomes em 1.976 spans arbitrados e
+#                    6.457 labels de treino), e continua redigindo todo o resto;
+#   `0`            — tudo que o modelo marca, o comportamento de 1.0 a 1.6;
+#   `1`            — os filtros do runtime (confianca minima + forma de nome) mais a
+#                    blocklist extra. Deixa de redigir nome escrito todo em minuscula.
+# Racional e procedencia da lista: `app/blocklist.py`. `ANONY_FILTROS=0` volta a 1.6.
+FILTROS = os.environ.get("ANONY_FILTROS", "blocklist")
+if FILTROS not in ("0", "1", "blocklist"):
+    raise SystemExit(f"ANONY_FILTROS={FILTROS!r}: os valores sao 0, 1 ou blocklist")
+FILTROS_RUNTIME = FILTROS == "1"
+FILTROS_BLOCKLIST = FILTROS in ("1", "blocklist")
 # Fallback da redacao, LIGADO por default. So age onde hoje nao acontece nada: span cuja
 # forma inteira nao casa no original — o caso do span que cruza uma tag HTML, porque o
 # modelo le o texto sem tags e as ve como espaco. Custo medido: 1,5 termo clinico redigido
@@ -118,7 +133,7 @@ class PacoteFrase(Pacote):
 #
 # Suba isto em todo PR que mude o que o /clean DEVOLVE (campo novo, status diferente,
 # decisao nova). Mudanca so de dependencia ou de build nao precisa.
-SERVICO = "1.6"
+SERVICO = "1.7"
 
 app = FastAPI(title="NoHarm Anony API", version=SERVICO)
 
@@ -131,16 +146,25 @@ app.add_middleware(
 )
 
 pacote: Pacote | None = None
+# A blocklist que o modo `blocklist` (e o `1`) aplica: a do manifesto do pacote unida a
+# `app/blocklist.txt`. Montada no startup, porque a do manifesto so existe depois do load.
+BLOCKLIST: set = set()
+BLOCKLIST_EXTRA_N = 0
 
 @app.on_event("startup")
 def load_model():
-    global pacote
+    global pacote, BLOCKLIST, BLOCKLIST_EXTRA_N
     print(f"Load Model ({PACOTE_DIR}, contexto={CONTEXTO}, filtros={FILTROS})", flush=True)
     classe = PacoteFrase if CONTEXTO == "frase" else Pacote
     # `carrega` confere o md5 de cada arquivo contra o manifesto: pacote montado com outro
     # `.onnx` prediz outra coisa sem nenhum sinal, e isso tem de derrubar o startup.
     pacote = classe.carrega(PACOTE_DIR, threads=THREADS)
-    print(f"Done! versao {pacote.versao}", flush=True)
+    extra = carrega_blocklist()
+    BLOCKLIST_EXTRA_N = len(extra)
+    BLOCKLIST = set(pacote.blocklist) | extra
+    print(f"Done! versao {pacote.versao} | blocklist: {len(pacote.blocklist)} do manifesto "
+          f"+ {BLOCKLIST_EXTRA_N} extra"
+          f"{'' if FILTROS_BLOCKLIST else ' (INATIVA: ANONY_FILTROS=0)'}", flush=True)
     # `preparo.plain_do_html` e copia do `to_plain` do runtime (o CI nao tem pacote para
     # importar). Se uma das duas mudar sozinha, o modelo passa a ler um texto que nenhuma
     # regua mediu — entao isso e erro de arranque, nao aviso.
@@ -228,13 +252,19 @@ def restore_context(anonymized_text, original_text):
     return result
 
 def achados(spans):
-    """Textos dos spans. Sem `ANONY_FILTROS`, TUDO que o modelo marcou — como sempre foi.
+    """Textos dos spans que o servico vai redigir, segundo `ANONY_FILTROS`.
 
-    Com `ANONY_FILTROS=1` valem os filtros do runtime (confianca minima e forma de nome):
-    redige menos termo clinico por engano, e em troca deixa de redigir nome escrito todo em
-    minuscula. E mudanca de produto, nao de motor.
+    `0`: TUDO que o modelo marcou — como sempre foi. `blocklist`: tudo menos a forma que
+    esta na blocklist (manifesto + `app/blocklist.txt`), sem corte de confianca e sem
+    exigencia de maiuscula. `1`: os filtros do runtime (confianca minima + forma de nome)
+    mais a blocklist extra — redige menos termo clinico por engano e, em troca, deixa de
+    redigir nome escrito todo em minuscula. Os tres sao mudanca de produto, nao de motor.
     """
-    return [s["texto"] for s in spans if s["prod"] or not FILTROS]
+    if FILTROS_RUNTIME:
+        spans = [s for s in spans if s["prod"]]
+    if FILTROS_BLOCKLIST:
+        spans = filtra_blocklist(spans, BLOCKLIST)
+    return [s["texto"] for s in spans]
 
 
 @app.get("/")
@@ -259,7 +289,11 @@ def versao():
         "servico": SERVICO,
         "pacote": pacote.versao if pacote else None,
         "contexto": CONTEXTO,
-        "filtros": FILTROS,
+        "filtros": FILTROS_RUNTIME,
+        "filtros_modo": FILTROS,
+        # quantas formas a blocklist aplicada tem (manifesto + extra); `null` = inativa
+        "blocklist": len(BLOCKLIST) if FILTROS_BLOCKLIST else None,
+        "blocklist_extra": BLOCKLIST_EXTRA_N,
         "redacao_pedacos": REDACAO_PEDACOS,
         "plain": PLAIN,
         "max_time": MAX_TIME,
