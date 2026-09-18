@@ -82,14 +82,16 @@ from anony_onnx_runtime import Pacote  # noqa: E402
 # `ANONY_CONTEXTO=frase` volta ao comportamento anterior sem rebuild.
 CONTEXTO = os.environ.get("ANONY_CONTEXTO", "documento")
 # Tres modos, e a diferenca entre eles e o que se DEIXA de redigir:
-#   `0` (default)  — tudo que o modelo marca, como sempre foi;
-#   `blocklist`    — tudo, MENOS a forma que esta na blocklist (a do manifesto do pacote
-#                    unida a `app/blocklist.txt`). Sem corte de confianca e sem exigencia
-#                    de maiuscula: redige menos so onde a medicao diz que nao havia nome;
+#   `blocklist` (default desde a 1.7) — tudo, MENOS a forma que esta na blocklist (a do
+#                    manifesto do pacote unida a `app/blocklist.txt`). Sem corte de
+#                    confianca e sem exigencia de maiuscula: redige menos so onde a
+#                    medicao diz que nao havia nome (0 nomes em 1.976 spans arbitrados e
+#                    6.457 labels de treino), e continua redigindo todo o resto;
+#   `0`            — tudo que o modelo marca, o comportamento de 1.0 a 1.6;
 #   `1`            — os filtros do runtime (confianca minima + forma de nome) mais a
 #                    blocklist extra. Deixa de redigir nome escrito todo em minuscula.
-# Racional e procedencia da lista: `app/blocklist.py`.
-FILTROS = os.environ.get("ANONY_FILTROS", "0")
+# Racional e procedencia da lista: `app/blocklist.py`. `ANONY_FILTROS=0` volta a 1.6.
+FILTROS = os.environ.get("ANONY_FILTROS", "blocklist")
 if FILTROS not in ("0", "1", "blocklist"):
     raise SystemExit(f"ANONY_FILTROS={FILTROS!r}: os valores sao 0, 1 ou blocklist")
 FILTROS_RUNTIME = FILTROS == "1"

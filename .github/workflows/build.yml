@@ -65,6 +65,7 @@ jobs:
             python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['timeout_s']==13 else 'orcamento default nao e 13 s: %r' % v['timeout_s'])"
             python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v['orcamento']=='parcial' else 'modo do orcamento default nao e parcial: %r' % v['orcamento'])"
             python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v.get('servico') and v.get('pacote') else 'faltou servico ou pacote no /versao: %r' % v)"
+            python3 -c "import json,sys; v=json.load(open('/tmp/versao.json')); sys.exit(0 if v.get('filtros_modo')=='blocklist' and (v.get('blocklist') or 0) > 92 else 'blocklist nao e o default, ou a lista extra nao entrou: %r' % {k:v.get(k) for k in ('filtros_modo','blocklist','blocklist_extra')})"
 
       # O parcial so aparece depois de a vazao ser medida e de o texto estourar o orcamento —
       # subir um container com `ANONY_TIMEOUT_S=1` e a unica forma de exercitar o caminho

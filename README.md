@@ -156,7 +156,8 @@ na cauda.
 
 ```
 $ curl -s http://localhost/versao
-{"servico":"1.6","pacote":"o1.3","contexto":"documento","filtros":false,
+{"servico":"1.7","pacote":"o1.3","contexto":"documento","filtros":false,
+ "filtros_modo":"blocklist","blocklist":130,"blocklist_extra":38,
  "redacao_pedacos":true,"plain":"espaco",
  "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
  "vazao_chars_s":983,"amostras":2406}
@@ -176,7 +177,7 @@ que diz o que a instalação aguenta (`null` = ainda sem amostra).
 | `ANONY_ORCAMENTO` | `parcial` | O que fazer com o texto que não cabe: redige o prefixo que cabe e devolve o resto como original, com 200 rotulado. `recusa` volta ao 413. Ver 2.4.1. |
 | `ANONY_MAX_TIME` | `20` | Teto do modo `frase`. **O nome diz tempo e o efeito é tamanho**: o corte cai por volta de `valor × 100` caracteres. Só tem efeito com `ANONY_CONTEXTO=frase`. |
 | `ANONY_PLAIN` | `espaco` | Como o HTML vira o texto que o modelo lê. `espaco` troca cada tag por um espaço, igual ao runtime do pacote e ao job do servidor. `bs4` volta ao `get_text()` sem separador da 1.5, que **funde** o fim de um `<p>` no nome seguinte e deixava 84–89% dos nomes achados sem redação em dois hospitais. Ver 2.7. |
-| `ANONY_FILTROS` | `0` | `blocklist` deixa de redigir só a forma que está na blocklist (a do pacote unida a `app/blocklist.txt`), sem corte de confiança e sem exigência de maiúscula. `1` aplica também os filtros de confiança e forma de nome do runtime, e com isso deixa de redigir nome escrito todo em minúscula. Ver 2.8. |
+| `ANONY_FILTROS` | `blocklist` | Deixa de redigir só a forma que está na blocklist (a do pacote unida a `app/blocklist.txt`), sem corte de confiança e sem exigência de maiúscula. `0` volta ao comportamento da 1.6: redige tudo que o modelo marca. `1` aplica também os filtros de confiança e forma de nome do runtime, e com isso deixa de redigir nome escrito todo em minúscula. Ver 2.8. |
 | `ANONY_THREADS` | `0` (todas) | Threads do onnxruntime. |
 | `ANONY_PACOTE_DIR` | `/app/noharm-anony-onnx` | Onde o pacote do modelo foi extraído. |
 
@@ -241,8 +242,8 @@ de hospital, cidade ou paciente — isso fica na lista do job, no servidor.
 `app/test_blocklist.py` segura as violações mais fáceis de cometer sem querer.
 
 O modo em uso e o tamanho da lista aplicada saem no `/versao` (`filtros_modo`, `blocklist`,
-`blocklist_extra`). O default continua `0`: ligar o modo é decisão de quem opera, e é uma
-variável de ambiente.
+`blocklist_extra`). **`blocklist` é o default desde a 1.7.** `ANONY_FILTROS=0` volta ao
+comportamento da 1.6 sem rebuild — redigir tudo que o modelo marca.
 
 ### 2.6 Development
 
