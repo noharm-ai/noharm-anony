@@ -233,9 +233,9 @@ versionada neste repositório —, e continua redigindo todo o resto. Não é su
 `higiene` na lista não toca em `Higienópolis`.
 
 **De onde vem a lista.** Régua de produção de 17/09/2026: janela virgem, 1.976 spans
-arbitrados em cego, mais as 6.457 labels do corpus de treino. Cada forma do arquivo foi lida
-como não-nome em todas as ocorrências e nunca como nome, nos dois conjuntos; juntas cobrem
-**40% do falso positivo visível** do modelo em produção naquela janela — rótulo de campo de
+arbitrados em cego. Nenhuma forma do arquivo foi arbitrada como nome ali, nem na janela
+independente de 04–10/08 medida depois; juntas cobrem **40% do falso positivo visível** do
+modelo em produção naquela janela — rótulo de campo de
 formulário (`Higiene Oral: : Sim`, `Eficacia`), escala clínica com epônimo, fármaco,
 material, parentesco, cortesia. São as mesmas formas que entraram na blocklist do job do
 servidor no mesmo dia.
@@ -244,6 +244,12 @@ servidor no mesmo dia.
 medida em produção. **O que não pode:** nada com leitura de nome de pessoa real, nem nome
 de hospital, cidade ou paciente — isso fica na lista do job, no servidor.
 `app/test_blocklist.py` segura as violações mais fáceis de cometer sem querer.
+
+Contra as 8.029 labels do corpus de treino há **uma** colisão, inspecionada: `Sobrinha`
+aparece rotulada como nome uma vez, em `Sobrinha *** informa que…`, onde o `***` é o nome já
+redigido e o rótulo pegou o termo de parentesco anterior a ele — erro de anotação do gold,
+não nome. A primeira contagem publicada dizia zero e estava errada: o script lia `labels` e a
+chave do corpus é `label`, e nome de campo errado devolve lista vazia sem acusar nada.
 
 O modo em uso e o tamanho da lista aplicada saem no `/versao` (`filtros_modo`, `blocklist`,
 `blocklist_extra`). **`blocklist` é o default desde a 1.7.** `ANONY_FILTROS=0` volta ao

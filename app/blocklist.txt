@@ -2,9 +2,17 @@
 # formulário, escala clínica com epônimo, fármaco, material, parentesco, cortesia.
 #
 # Procedência: régua 3 do anony de 17/09/2026 — janela virgem de produção, 1.976 spans
-# arbitrados em cego, mais as 6.457 labels do corpus de treino. Cada forma aqui foi lida
-# como NÃO-NOME em todas as ocorrências, e nunca como nome, nos dois conjuntos. Juntas
-# cobrem 40% do falso positivo visível do modelo em produção naquela janela.
+# arbitrados em cego. Nenhuma forma daqui foi arbitrada como nome ali, nem na janela
+# independente de 04–10/08 que veio depois. Juntas cobrem 40% do falso positivo visível
+# do modelo em produção naquela janela.
+#
+# Contra as 8.029 labels do corpus de treino há UMA colisão, e ela foi inspecionada:
+# `Sobrinha` aparece rotulada como nome uma vez, em `Sobrinha *** informa que...` — o
+# `***` é o nome, já redigido pelo anony do cliente, e o rótulo pegou o termo de
+# parentesco que vem antes dele, como pegaria `Enf.`. É erro de anotação do gold, não
+# nome; `sobrinha`/`sobrinho` ficam. (A primeira contagem que publicamos dizia zero
+# colisões e estava errada: o script lia `labels` e a chave do corpus é `label`. Um
+# nome de campo errado devolve lista vazia e a verificação passa sem verificar nada.)
 #
 # Regras deste arquivo: uma forma por linha, comparação por forma INTEIRA do span em
 # `casefold` (não é substring); nada que tenha leitura de nome de pessoa real; nada que
