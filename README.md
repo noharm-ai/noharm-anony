@@ -265,14 +265,31 @@ Medido contra a 1.7 com 10 `PUT /clean` simultâneos, cada um com um marcador ú
 do corpo RTF: **9 das 10 respostas erradas** — 5 com o texto de *outra* requisição e 4
 **vazias** (o `unrtf` falha no arquivo escrito pela metade, e o serviço devolve a nota sem
 texto, que é a perda silenciosa da mesma corrida). A proporção varia com a máquina e com o
-tamanho da nota; o que não varia é haver troca. O gatilho de produção é o
-`[Notes] Pull Oracle Data` do NiFi trazendo dezenas de evoluções por lote para o
-`InvokeHTTP`, que abre várias conexões.
+tamanho da nota; o que não varia é haver troca.
+
+**Quem chega a ter dois pedidos em voo.** A corrida precisa disso, e a fila do NiFi *não* a
+produz sozinha: um `InvokeHTTP` com `Concurrent Tasks = 1` serializa os pedidos, e um lote
+de dezenas de notas só mantém a fila cheia. Medido em 21/09/2026 nos backups de flow das
+instalações (205 lidos, 193 com o processador do `/clean` em `RUNNING`, 12 sem backup
+legível), duas configurações abrem a corrida — e **8 instalações estão numa delas**:
+
+| configuração | instalações | por que concorre |
+|---|---|---|
+| `Concurrent Tasks = 2` no `InvokeHTTP` do `/clean` | 1 | o NiFi mantém duas threads do mesmo processador, cada uma com o seu PUT |
+| dois ou mais `InvokeHTTP` do `/clean` apontando para o MESMO anony | 7 | cada um é sequencial, mas eles rodam em paralelo entre si (vistos 2, 3 e 4 rodando juntos) |
+
+⚠️ `Max Idle Connections` (5 no default do `InvokeHTTP`) **não** é paralelismo: é o pool de
+conexões ociosas do cliente HTTP. Com um processador e `Concurrent Tasks = 1` ele nunca
+produz dois pedidos ao mesmo tempo.
+
+Nas demais instalações a corrida não acontecia — mas o arquivo de nome fixo deixava a
+**última nota em claro no disco** do container (`/app/input.rtf`, confirmado num container
+da 1.7 depois de um pedido RTF), e isso valia para todas.
 
 A 1.7.1 dá a cada chamada um arquivo temporário exclusivo, apagado no `finally` — sem lock,
 porque serializar o `unrtf` custaria vazão, e vazão é exatamente o que o orçamento de
-`ANONY_TIMEOUT_S` gasta. Vale para **qualquer** cliente que mande evolução em RTF por esta
-rota: não era configuração de um hospital.
+`ANONY_TIMEOUT_S` gasta. O conserto é no serviço, e não em configuração de cliente: nada no
+`/clean` dependia de o chamador ser sequencial, e nada devia depender.
 
 Para conferir num serviço já rodando (o teste não usa PHI — os marcadores são sintéticos):
 

@@ -54,7 +54,9 @@ jobs:
       # nenhum teste de unidade a pega: ela só existe no `/clean` de verdade. Até a 1.7 o
       # `unrtf` lia um arquivo de nome fixo e 9 de 10 respostas voltavam erradas (5 com o
       # texto de outra requisição, 4 vazias) — PHI trocado com os metadados certos, que o
-      # destino não acusa.
+      # destino não acusa. Em produção os dois pedidos simultâneos vêm do `Concurrent
+      # Tasks` > 1 ou de dois `InvokeHTTP` no mesmo anony (8 instalações medidas), e o
+      # serviço não pode depender de o chamador ser sequencial.
       - name: Testar RTF concorrente (texto de outro paciente)
         run: python3 app/test_rtf_concorrente.py http://localhost
 
