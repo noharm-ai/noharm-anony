@@ -1,4 +1,4 @@
-import os, re, sys, time, traceback, unicodedata, subprocess
+import os, re, sys, tempfile, time, traceback, unicodedata, subprocess
 from bs4 import BeautifulSoup
 from nltk.tokenize import sent_tokenize
 
@@ -133,7 +133,13 @@ class PacoteFrase(Pacote):
 #
 # Suba isto em todo PR que mude o que o /clean DEVOLVE (campo novo, status diferente,
 # decisao nova). Mudanca so de dependencia ou de build nao precisa.
-SERVICO = "1.7"
+#
+# A 1.7.1 nao muda contrato nenhum — nenhum campo, nenhum status, nenhum knob novo. Ela
+# entra aqui porque conserta o texto que o /clean DEVOLVIA em pedido RTF concorrente (o
+# arquivo fixo do `rtf_to_text`, que trocava a nota de um paciente pela de outro), e sem
+# este numero nao ha como uma box dizer se tem o conserto: /versao e o unico lugar onde a
+# frota se distingue.
+SERVICO = "1.7.1"
 
 app = FastAPI(title="NoHarm Anony API", version=SERVICO)
 
@@ -176,15 +182,53 @@ def load_model():
         raise SystemExit("preparo.plain_do_html diverge do to_plain do runtime no canario")
 
 def rtf_to_text(rtf_content, errors):
-    with open("input.rtf", "w") as rtf_file:
-        rtf_file.write(rtf_content)
+    """RTF -> HTML pelo `unrtf`, em arquivo EXCLUSIVO de cada chamada.
 
-    command = "unrtf --html input.rtf"
-    result = subprocess.run(command, shell=True, text=True, capture_output=True)
-    if result.returncode == 0:
-        return result.stdout
-    print(f"Error: {result.stderr}")
-    return None
+    Ate o servico 1.7 o arquivo era `input.rtf`, nome FIXO no diretorio de trabalho do
+    processo. O `/clean` e um `def` sincrono, entao o Starlette despacha cada pedido para
+    uma thread do threadpool do uvicorn (processo unico, sem `--workers`): duas chamadas
+    RTF concorrentes escreviam e liam o MESMO arquivo, e o `unrtf` de uma lia o RTF que a
+    outra acabara de sobrescrever.
+
+    O desfecho e o texto de OUTRO paciente na resposta deste, com
+    `fkevolucao`/`nratendimento`/`dtevolucao` corretos, ou seja PHI trocado que nada no
+    destino acusa. Medido contra a 1.7 com 10 PUTs simultaneos, cada um com um marcador
+    unico no corpo RTF: 9 respostas erradas — 5 com o texto de outra requisicao e 4 VAZIAS
+    (o `unrtf` falha no arquivo escrito pela metade e a nota sai sem texto: a perda
+    silenciosa da mesma corrida). O gatilho de producao e o
+    `[Notes] Pull Oracle Data` do NiFi trazendo dezenas de evolucoes por lote para o
+    `InvokeHTTP`, que abre varias conexoes — concorrencia real sempre que duas notas em RTF
+    chegam juntas.
+
+    Nome unico por chamada resolve a corrida sem serializar o `unrtf` (um lock custaria
+    vazao, e a vazao aqui e o que o orcamento de `TIMEOUT_S` gasta). O `unrtf` le o arquivo
+    e escreve em stdout, entao nao ha outro estado compartilhado no disco.
+    """
+    caminho = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".rtf", delete=False, errors=errors
+        ) as rtf_file:
+            caminho = rtf_file.name
+            rtf_file.write(rtf_content)
+
+        # Lista em vez de `shell=True`: o caminho vem do tempfile e nao passa por shell
+        # nenhum, e uma chamada a menos de `/bin/sh` por nota.
+        result = subprocess.run(
+            ["unrtf", "--html", caminho], text=True, capture_output=True
+        )
+        if result.returncode == 0:
+            return result.stdout
+        print(f"Error: {result.stderr}")
+        return None
+    finally:
+        # Sem isto o /tmp do container cresce uma nota por pedido RTF, e o que fica no disco
+        # e justamente o texto em claro que este servico existe para nao deixar por ai.
+        if caminho:
+            try:
+                os.unlink(caminho)
+            except OSError:
+                pass
 
 def remove_html_tags(html):
     soup = BeautifulSoup(html, "html.parser")
