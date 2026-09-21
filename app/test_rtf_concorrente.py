@@ -6,6 +6,11 @@ quanto numa box de hospital para conferir se ela ja tem o conserto:
 
     python3 app/test_rtf_concorrente.py http://localhost
 
+Em producao os dois pedidos simultaneos vem do `Concurrent Tasks` > 1 do `InvokeHTTP` ou de
+dois processadores apontando para o mesmo anony — nao do tamanho do lote, que apenas mantem
+a fila cheia. Mas o servico nao pode depender de o chamador ser sequencial, e e isso que
+este teste trava.
+
 Ate a 1.7 o `rtf_to_text` escrevia o corpo num arquivo de nome FIXO (`input.rtf`) e chamava
 o `unrtf` sobre ele. O `/clean` e um `def` sincrono, entao o Starlette da cada pedido a uma
 thread do threadpool do uvicorn (processo unico, sem `--workers`): dois pedidos RTF
