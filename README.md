@@ -156,7 +156,7 @@ na cauda.
 
 ```
 $ curl -s http://localhost/versao
-{"servico":"1.7","pacote":"o1.3","contexto":"documento","filtros":false,
+{"servico":"1.7.1","pacote":"o1.3","contexto":"documento","filtros":false,
  "filtros_modo":"blocklist","blocklist":130,"blocklist_extra":38,
  "redacao_pedacos":true,"plain":"espaco",
  "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
@@ -248,6 +248,37 @@ de hospital, cidade ou paciente — isso fica na lista do job, no servidor.
 O modo em uso e o tamanho da lista aplicada saem no `/versao` (`filtros_modo`, `blocklist`,
 `blocklist_extra`). **`blocklist` é o default desde a 1.7.** `ANONY_FILTROS=0` volta ao
 comportamento da 1.6 sem rebuild — redigir tudo que o modelo marca.
+
+### 2.9 RTF concorrente: o texto de outro paciente (serviço 1.7.1)
+
+Até a 1.7 a conversão RTF→HTML escrevia o corpo do pedido num arquivo de **nome fixo**
+(`input.rtf`, no diretório de trabalho do processo) e chamava o `unrtf` sobre ele. O
+`/clean` é um `def` síncrono, então cada pedido roda numa thread do threadpool do uvicorn
+(processo único, sem `--workers`): **duas notas em RTF chegando juntas escreviam e liam o
+mesmo arquivo**, e o `unrtf` de uma lia o RTF que a outra acabara de sobrescrever.
+
+O desfecho não era erro nem nota vazia — era a evolução gravada com `fkevolucao`,
+`nratendimento`, `dtevolucao` e autor **corretos** e o texto livre de **outro paciente**.
+Nada no destino acusa isso: o registro existe e parece íntegro.
+
+Medido contra a 1.7 com 10 `PUT /clean` simultâneos, cada um com um marcador único dentro
+do corpo RTF: **9 das 10 respostas erradas** — 5 com o texto de *outra* requisição e 4
+**vazias** (o `unrtf` falha no arquivo escrito pela metade, e o serviço devolve a nota sem
+texto, que é a perda silenciosa da mesma corrida). A proporção varia com a máquina e com o
+tamanho da nota; o que não varia é haver troca. O gatilho de produção é o
+`[Notes] Pull Oracle Data` do NiFi trazendo dezenas de evoluções por lote para o
+`InvokeHTTP`, que abre várias conexões.
+
+A 1.7.1 dá a cada chamada um arquivo temporário exclusivo, apagado no `finally` — sem lock,
+porque serializar o `unrtf` custaria vazão, e vazão é exatamente o que o orçamento de
+`ANONY_TIMEOUT_S` gasta. Vale para **qualquer** cliente que mande evolução em RTF por esta
+rota: não era configuração de um hospital.
+
+Para conferir num serviço já rodando (o teste não usa PHI — os marcadores são sintéticos):
+
+```
+python3 app/test_rtf_concorrente.py http://localhost
+```
 
 ### 2.6 Development
 
