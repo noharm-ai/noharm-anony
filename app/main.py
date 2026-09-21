@@ -195,10 +195,17 @@ def rtf_to_text(rtf_content, errors):
     destino acusa. Medido contra a 1.7 com 10 PUTs simultaneos, cada um com um marcador
     unico no corpo RTF: 9 respostas erradas — 5 com o texto de outra requisicao e 4 VAZIAS
     (o `unrtf` falha no arquivo escrito pela metade e a nota sai sem texto: a perda
-    silenciosa da mesma corrida). O gatilho de producao e o
-    `[Notes] Pull Oracle Data` do NiFi trazendo dezenas de evolucoes por lote para o
-    `InvokeHTTP`, que abre varias conexoes — concorrencia real sempre que duas notas em RTF
-    chegam juntas.
+    silenciosa da mesma corrida).
+
+    Quem produz os dois pedidos em voo NAO e o lote de notas: o `InvokeHTTP` com
+    `Concurrent Tasks = 1` serializa, e o lote so mantem a fila cheia. Medido nos backups
+    de flow das instalacoes em 21/09/2026 (193 com o processador rodando), duas
+    configuracoes abrem a corrida, e 8 instalacoes estao numa delas: uma com
+    `Concurrent Tasks = 2` no proprio processador, sete com dois ou mais `InvokeHTTP` do
+    `/clean` apontando para o MESMO anony (vistos 2, 3 e 4 rodando juntos). Nas outras nao
+    havia corrida — mas o arquivo fixo deixava a ULTIMA nota em claro no disco do
+    container, o que valia para todas. Nada no `/clean` devia depender de o chamador ser
+    sequencial.
 
     Nome unico por chamada resolve a corrida sem serializar o `unrtf` (um lock custaria
     vazao, e a vazao aqui e o que o orcamento de `TIMEOUT_S` gasta). O `unrtf` le o arquivo
