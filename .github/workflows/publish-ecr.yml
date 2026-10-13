@@ -1,0 +1,57 @@
+name: Publish ECR image
+
+# Publica a imagem do anony no ECR privado da NoHarm — mesmo repositório
+# compartilhado usado pelo noharm-tools/noharm-code (repo noharm-cli),
+# integracao-mv e getname, diferenciada por tag: `main` -> `anony-latest`,
+# qualquer outro branch -> `anony-develop`.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Dockerfile"
+      - "requirements.txt"
+      - "app/**"
+      - ".github/workflows/publish-ecr.yml"
+  # Permite republicar sem um commit novo (ex.: reconstrução após incidente
+  # no registry).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Fork não tem os secrets e falharia no login — e não deveria publicar de
+    # qualquer forma.
+    if: github.repository == 'noharm-ai/anony'
+    steps:
+      - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: sa-east-1
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@c962da2960ed15f492addc26fffa274485265950 # v2.0.2
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "tag=anony-latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=anony-develop" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.ecr-login.outputs.registry }}/noharm-cli:${{ steps.tag.outputs.tag }}
