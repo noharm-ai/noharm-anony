@@ -1,7 +1,7 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.4
 striprtf==0.0.33
-nltk==3.10.3
+nltk==3.10.4
 beautifulsoup4==4.15.0
 onnxruntime==1.29.0
 tokenizers==0.23.1
