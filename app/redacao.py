@@ -107,7 +107,7 @@ def trechos_que_casam(span, texto):
     return rec(span.split())
 
 
-def redige(spans, texto, por_pedacos=True):
+def redige(spans, texto, por_pedacos=True, preserva=None):
     """Troca cada span por `***` no texto, todas as ocorrencias, ignorando caixa.
 
     `por_pedacos` (env `ANONY_REDACAO_PEDACOS`, ligado por default) e o FALLBACK, e so
@@ -122,6 +122,12 @@ def redige(spans, texto, por_pedacos=True):
     2026-08-30 ao publicar o `f1.5` ("nome perdido e vazamento, lixo e redacao a mais"), e
     por isso e um KNOB e nao uma regra: `ANONY_REDACAO_PEDACOS=0` volta a so redigir a forma
     inteira, que e o comportamento do servico 1.4.
+
+    `preserva` (opcional) e um predicado sobre o texto de um trecho: o trecho para o qual
+    ele devolve `True` NAO e redigido pelo fallback. O servico passa a blocklist aqui, porque
+    ela filtra o span inteiro e o fallback cria trechos novos depois do filtro: sem isso,
+    `CARVEDILOL Joana` cruzando uma tag virava `CARVEDILOL` + `Joana` e o termo da
+    blocklist voltava a ser mascarado (chamado #24154).
     """
     resultado = texto
     for span in spans:
@@ -132,6 +138,8 @@ def redige(spans, texto, por_pedacos=True):
         if not por_pedacos:
             continue
         for trecho in trechos_que_casam(span, resultado):
+            if preserva is not None and preserva(trecho):
+                continue
             padrao = padrao_do_span(trecho)
             if padrao is not None:
                 resultado = re.sub(padrao, "***", resultado, flags=re.IGNORECASE)

@@ -25,8 +25,7 @@ def test_chamado_24154_termos_clinicos_estao_na_lista():
     """Termos relatados como mascarados no chamado #24154: fármaco, marca, escala, sigla
     e achado de dreno — inclusive a forma entre parênteses, que é outro span."""
     bl = carrega()
-    for forma in ("carvedilol", "kdigo", "gentamicina", "iamcsst", "aerolin",
-                  "drenado", "(drenado)"):
+    for forma in ("carvedilol", "kdigo", "gentamicina", "iamcsst", "aerolin", "drenado"):
         assert forma in bl, forma
     assert e_bloqueado("GENTAMICINA", bl)
     assert e_bloqueado("(DRENADO)", bl)
@@ -53,6 +52,16 @@ def test_a_comparacao_e_por_forma_inteira_e_nunca_por_substring():
     assert not e_bloqueado("Higienópolis", bl), "substring não conta"
     assert not e_bloqueado("Higiene Oral", bl), "a forma inteira é outra"
     assert not e_bloqueado("Calibre 22", bl)
+
+
+def test_pontuacao_de_borda_sai_antes_da_comparacao_e_o_miolo_nao():
+    bl = {"drenado", "kdigo", "higiene oral"}
+    assert e_bloqueado("(DRENADO)", bl)
+    assert e_bloqueado("KDIGO:", bl)
+    assert e_bloqueado("\"Higiene Oral\",", bl)
+    assert not e_bloqueado("(DRENADO) Joana", bl), "só a borda sai"
+    assert not e_bloqueado("Higiene-Oral", bl), "pontuação no miolo não sai"
+    assert not e_bloqueado("()", bl)
 
 
 def test_filtra_derruba_so_a_forma_listada_e_preserva_a_ordem():
