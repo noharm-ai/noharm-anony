@@ -129,6 +129,16 @@ def test_knob_desliga_o_fallback():
     assert redige([span], original) != original
 
 
+def test_fallback_nao_redige_trecho_que_o_predicado_preserva():
+    """Chamado #24154: o span `CARVEDILOL Joana Prates` cruza a tag e nao casa inteiro; o
+    fallback redigiria `CARVEDILOL` junto do nome. Com `preserva` so o nome sai."""
+    original = "<p>CARVEDILOL</p><p>Joana Prates</p>"
+    span = "CARVEDILOL Joana Prates"
+    assert redige([span], original) == "<p>***</p><p>***</p>"
+    preserva = lambda t: t.casefold() == "carvedilol"
+    assert redige([span], original, preserva=preserva) == "<p>CARVEDILOL</p><p>***</p>"
+
+
 if __name__ == "__main__":
     testes = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in testes:

@@ -115,7 +115,16 @@ jobs:
             PY
 
       - name: Test CPU antiga (Xeon E5420, sem x86-64-v2)
+        # No Ubuntu 26.04 (ubuntu-latest desde 11/2026) `qemu-user-static` virou pacote
+        # virtual sem candidato: o `qemu-user` passou a ser estatico e o binario e o
+        # `qemu-x86_64`. Tenta o nome antigo e cai no novo; o binario tem de ser estatico,
+        # porque roda DENTRO do container, sem as libs do runner.
         run: |
-            sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static
-            docker run --rm -v /usr/bin/qemu-x86_64-static:/qemu:ro anony \
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends qemu-user-static \
+              || sudo apt-get install -y --no-install-recommends qemu-user
+            Q=$(command -v qemu-x86_64-static || command -v qemu-x86_64)
+            ldd "$Q" 2>&1 | grep -Eq "not a dynamic|statically linked" \
+              || { echo "$Q nao e estatico; nao roda dentro do container"; exit 1; }
+            docker run --rm -v "$Q":/qemu:ro anony \
               /qemu -cpu Penryn /usr/local/bin/python3 -c "import numpy, onnxruntime, tokenizers; print('ok em x86-64-v1')"

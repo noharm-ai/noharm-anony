@@ -9,7 +9,7 @@ from starlette import status
 
 from redacao import redige
 from preparo import CANARIO, plain_do_html
-from blocklist import carrega as carrega_blocklist, filtra as filtra_blocklist
+from blocklist import carrega as carrega_blocklist, e_bloqueado, filtra as filtra_blocklist
 from orcamento import (
     Medidor,
     aviso_parcial,
@@ -139,7 +139,11 @@ class PacoteFrase(Pacote):
 # arquivo fixo do `rtf_to_text`, que trocava a nota de um paciente pela de outro), e sem
 # este numero nao ha como uma box dizer se tem o conserto: /versao e o unico lugar onde a
 # frota se distingue.
-SERVICO = "1.7.1"
+#
+# A 1.7.2 tambem nao muda contrato. Muda o texto devolvido: a blocklist passa a valer para
+# o span com pontuacao de borda (`(DRENADO)`, `KDIGO:`) e para os trechos do fallback por
+# pedacos, e ganha os termos clinicos do chamado #24154.
+SERVICO = "1.7.2"
 
 app = FastAPI(title="NoHarm Anony API", version=SERVICO)
 
@@ -268,7 +272,10 @@ def remove_ner(spans, original_text) -> str:
     (HTML no meio do nome segue sem casar) estao no modulo.
     """
     soup = BeautifulSoup(original_text, "html.parser")
-    return redige(spans, str(soup), por_pedacos=REDACAO_PEDACOS)
+    # A blocklist ja tirou os spans inteiros (`achados`); aqui ela vale tambem para os
+    # trechos que o fallback por pedacos cria a partir de um span que passou no filtro.
+    preserva = (lambda t: e_bloqueado(t, BLOCKLIST)) if FILTROS_BLOCKLIST else None
+    return redige(spans, str(soup), por_pedacos=REDACAO_PEDACOS, preserva=preserva)
 
 def remove_accents(input_str):
     nfkd_form = unicodedata.normalize("NFKD", input_str)

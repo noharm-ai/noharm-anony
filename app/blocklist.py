@@ -41,9 +41,19 @@ def carrega(caminho=CAMINHO_PADRAO):
     return formas
 
 
+# Pontuação que o modelo deixa colada na borda do span (`KDIGO:`, `(DRENADO)`, `Carvedilol,`).
+# Ela não muda o que o termo é; sem tirá-la, cada variante pontuada exigiria uma linha nova.
+PONTUACAO_DE_BORDA = " \t\r\n\xa0.,;:!?()[]{}\"'«»“”‘’-–—/*"
+
+
 def e_bloqueado(texto, blocklist):
-    """A forma INTEIRA do span, em `casefold`, está na lista?"""
-    return texto.strip().casefold() in blocklist
+    """A forma INTEIRA do span, em `casefold`, está na lista?
+
+    Compara também a forma sem a pontuação de borda: `(DRENADO)` e `KDIGO:` são `drenado`
+    e `kdigo`. Continua sendo forma inteira — só a borda sai, nunca o miolo.
+    """
+    t = texto.strip().casefold()
+    return t in blocklist or t.strip(PONTUACAO_DE_BORDA) in blocklist
 
 
 def filtra(spans, blocklist):

@@ -56,3 +56,19 @@ audição
 bronquite
 insonia
 insônia
+#
+# Chamado #24154 (11/2026): termos clínicos relatados pelo cliente como mascarados nas
+# evoluções. Fármaco, marca, escala clínica, sigla diagnóstica e achado de dreno.
+# Medido na réplica (7 dias, um cliente): todos aparecem por extenso na maioria das
+# notas; o mascaramento é falso positivo pontual, dependente de contexto. O epônimo
+# de síndrome do mesmo chamado NÃO entra: tem leitura de nome de pessoa (regra acima).
+# Procedência diferente da do cabeçalho: este lote veio do relato do cliente, e NÃO
+# passou pela régua de 17/09 nem pela contagem contra as labels do corpus de treino.
+# `(DRENADO)`, como o cliente viu, casa `drenado`: a pontuação de borda do span sai
+# antes da comparação (`blocklist.e_bloqueado`).
+carvedilol
+kdigo
+gentamicina
+iamcsst
+aerolin
+drenado
