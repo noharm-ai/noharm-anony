@@ -157,7 +157,7 @@ na cauda.
 ```
 $ curl -s http://localhost/versao
 {"servico":"1.7.2","pacote":"o1.3","contexto":"documento","filtros":false,
- "filtros_modo":"blocklist","blocklist":137,"blocklist_extra":45,
+ "filtros_modo":"blocklist","blocklist":136,"blocklist_extra":44,
  "redacao_pedacos":true,"plain":"espaco",
  "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
  "vazao_chars_s":983,"amostras":2406}
