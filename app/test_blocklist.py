@@ -21,6 +21,17 @@ def test_o_arquivo_versionado_carrega_e_nao_esta_vazio():
         assert forma in bl, forma
 
 
+def test_chamado_24154_termos_clinicos_estao_na_lista():
+    """Termos relatados como mascarados no chamado #24154: fármaco, marca, escala, sigla
+    e achado de dreno — inclusive a forma entre parênteses, que é outro span."""
+    bl = carrega()
+    for forma in ("carvedilol", "kdigo", "gentamicina", "iamcsst", "aerolin",
+                  "drenado", "(drenado)"):
+        assert forma in bl, forma
+    assert e_bloqueado("GENTAMICINA", bl)
+    assert e_bloqueado("(DRENADO)", bl)
+    assert e_bloqueado("Carvedilol", bl)
+
 def test_comentario_e_linha_vazia_sao_ignorados_e_a_forma_sai_em_casefold():
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:
         fh.write("# cabeçalho\n\n  Higiene Oral  \nEFICÁCIA # comentário no fim\n\n")
