@@ -126,7 +126,7 @@ def redige(spans, texto, por_pedacos=True, preserva=None):
     `preserva` (opcional) e um predicado sobre o texto de um trecho: o trecho para o qual
     ele devolve `True` NAO e redigido pelo fallback. O servico passa a blocklist aqui, porque
     ela filtra o span inteiro e o fallback cria trechos novos depois do filtro: sem isso,
-    `CARVEDILOL Joana` cruzando uma tag virava `CARVEDILOL` + `Joana` e o termo da
+    `CARVEDILOL Fulana` cruzando uma tag virava `CARVEDILOL` + `Fulana` e o termo da
     blocklist voltava a ser mascarado (chamado #24154).
     """
     resultado = texto

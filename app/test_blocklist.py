@@ -59,7 +59,7 @@ def test_pontuacao_de_borda_sai_antes_da_comparacao_e_o_miolo_nao():
     assert e_bloqueado("(DRENADO)", bl)
     assert e_bloqueado("KDIGO:", bl)
     assert e_bloqueado("\"Higiene Oral\",", bl)
-    assert not e_bloqueado("(DRENADO) Joana", bl), "só a borda sai"
+    assert not e_bloqueado("(DRENADO) Fulana", bl), "só a borda sai"
     assert not e_bloqueado("Higiene-Oral", bl), "pontuação no miolo não sai"
     assert not e_bloqueado("()", bl)
 

@@ -268,10 +268,10 @@ Junto, dois buracos por onde a blocklist deixava passar o termo listado:
 
 - **pontuação de borda.** `(DRENADO)` e `KDIGO:` não eram iguais a `drenado` e `kdigo`. A
   comparação agora tira a pontuação das bordas do span antes de olhar a lista — só das
-  bordas: `(DRENADO) Joana` continua sendo outra forma.
+  bordas: `(DRENADO) Fulana` continua sendo outra forma.
 - **fallback por pedaços.** A blocklist filtrava o span inteiro, e o fallback criava trechos
-  novos depois do filtro: `CARVEDILOL Joana Prates` cruzando uma tag virava `CARVEDILOL` +
-  `Joana Prates`, e os dois eram redigidos. O trecho que está na blocklist agora fica.
+  novos depois do filtro: `CARVEDILOL Fulana Silva` cruzando uma tag virava `CARVEDILOL` +
+  `Fulana Silva`, e os dois eram redigidos. O trecho que está na blocklist agora fica.
 
 ### 2.9 RTF concorrente: o texto de outro paciente (serviço 1.7.1)
 
