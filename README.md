@@ -156,8 +156,8 @@ na cauda.
 
 ```
 $ curl -s http://localhost/versao
-{"servico":"1.7.1","pacote":"o1.3","contexto":"documento","filtros":false,
- "filtros_modo":"blocklist","blocklist":130,"blocklist_extra":38,
+{"servico":"1.7.2","pacote":"o1.3","contexto":"documento","filtros":false,
+ "filtros_modo":"blocklist","blocklist":136,"blocklist_extra":44,
  "redacao_pedacos":true,"plain":"espaco",
  "max_time":20.0,"timeout_s":13.0,"orcamento":"parcial",
  "vazao_chars_s":983,"amostras":2406}
@@ -228,7 +228,7 @@ segundo custa recall (nome escrito todo em minúscula deixa de ser redigido), e 
 ninguém ligava.
 
 `ANONY_FILTROS=blocklist` separa as duas coisas: deixa de redigir **só** a forma cuja string
-inteira, em `casefold`, está na blocklist — a do manifesto unida a **`app/blocklist.txt`**,
+inteira, em `casefold` e sem a pontuação de borda (`(DRENADO)` casa `drenado`), está na blocklist — a do manifesto unida a **`app/blocklist.txt`**,
 versionada neste repositório —, e continua redigindo todo o resto. Não é substring:
 `higiene` na lista não toca em `Higienópolis`.
 
@@ -254,6 +254,42 @@ chave do corpus é `label`, e nome de campo errado devolve lista vazia sem acusa
 O modo em uso e o tamanho da lista aplicada saem no `/versao` (`filtros_modo`, `blocklist`,
 `blocklist_extra`). **`blocklist` é o default desde a 1.7.** `ANONY_FILTROS=0` volta ao
 comportamento da 1.6 sem rebuild — redigir tudo que o modelo marca.
+
+### 2.8.1 Termos clínicos do chamado #24154 (serviço 1.7.2)
+
+Um cliente relatou `Carvedilol`, `KDIGO`, `GENTAMICINA`, `IAMCSST`, `Aerolin` e `(DRENADO)`
+mascarados nas evoluções. Na réplica (7 dias, um cliente) todos aparecem por extenso na
+maioria das notas: é falso positivo pontual, dependente de contexto. Os seis entraram em
+`app/blocklist.txt`; o epônimo de síndrome do mesmo chamado ficou de fora por ter leitura de
+nome de pessoa. Esse lote vem do relato, **não** da régua de 17/09 nem da contagem contra o
+corpus.
+
+**Validação com dados reais (11/2026).** A/B com a mesma imagem e o mesmo pacote (`o1.3`),
+só a blocklist diferente, sobre 267 evoluções reais (30 dias) com o texto original do HIS:
+
+| termo | ocorrências | redigidas sem a lista | redigidas com a lista |
+|---|---|---|---|
+| carvedilol | 84 | 2 | 0 |
+| drenado | 10 | 2 | 0 |
+| kdigo | 134 | 0 | 0 |
+| gentamicina | 26 | 0 | 0 |
+| iamcsst | 59 | 0 | 0 |
+| aerolin | 14 | 0 | 0 |
+
+Total de spans redigidos: 139 → 136; a diferença é só dos termos da lista, nenhum nome
+deixou de ser redigido. O modelo marca `(DRENADO)` como `(DRENADO` (o parêntese de abertura
+entra no span, o de fechamento não); a pontuação de borda já casaria `drenado`, e a forma
+`(drenado` também está na lista.
+Teste: `python3 app/test_blocklist_termos_clinicos.py`.
+
+Junto, dois buracos por onde a blocklist deixava passar o termo listado:
+
+- **pontuação de borda.** `(DRENADO)` e `KDIGO:` não eram iguais a `drenado` e `kdigo`. A
+  comparação agora tira a pontuação das bordas do span antes de olhar a lista — só das
+  bordas: `(DRENADO) Fulana` continua sendo outra forma.
+- **fallback por pedaços.** A blocklist filtrava o span inteiro, e o fallback criava trechos
+  novos depois do filtro: `CARVEDILOL Fulana Silva` cruzando uma tag virava `CARVEDILOL` +
+  `Fulana Silva`, e os dois eram redigidos. O trecho que está na blocklist agora fica.
 
 ### 2.9 RTF concorrente: o texto de outro paciente (serviço 1.7.1)
 
