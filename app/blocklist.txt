@@ -64,8 +64,13 @@ insônia
 # de síndrome do mesmo chamado NÃO entra: tem leitura de nome de pessoa (regra acima).
 # Procedência diferente da do cabeçalho: este lote veio do relato do cliente, e NÃO
 # passou pela régua de 17/09 nem pela contagem contra as labels do corpus de treino.
-# `(DRENADO)`, como o cliente viu, casa `drenado`: a pontuação de borda do span sai
-# antes da comparação (`blocklist.e_bloqueado`).
+# Medição depois (11/2026): A/B na mesma imagem e pacote, 267 evoluções reais de 30 dias.
+# carvedilol 2 de 84 e drenado 2 de 10 mascarados sem a lista, 0 com ela; kdigo,
+# gentamicina, iamcsst e aerolin sem ocorrência mascarada na janela (entram como
+# prevenção). Detalhe em `app/test_blocklist_termos_clinicos.py`.
+# O modelo devolve `(DRENADO` (parêntese de abertura dentro, o de fechamento fora), e
+# casa `drenado`: a pontuação de borda do span sai antes da comparação
+# (`blocklist.e_bloqueado`).
 carvedilol
 kdigo
 gentamicina

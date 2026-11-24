@@ -264,6 +264,22 @@ maioria das notas: é falso positivo pontual, dependente de contexto. Os seis en
 nome de pessoa. Esse lote vem do relato, **não** da régua de 17/09 nem da contagem contra o
 corpus.
 
+**Validação com dados reais (11/2026).** A/B com a mesma imagem e o mesmo pacote (`o1.3`),
+só a blocklist diferente, sobre 267 evoluções reais (30 dias) com o texto original do HIS:
+
+| termo | ocorrências | redigidas sem a lista | redigidas com a lista |
+|---|---|---|---|
+| carvedilol | 84 | 2 | 0 |
+| drenado | 10 | 2 | 0 |
+| kdigo | 134 | 0 | 0 |
+| gentamicina | 26 | 0 | 0 |
+| iamcsst | 59 | 0 | 0 |
+| aerolin | 14 | 0 | 0 |
+
+O modelo marca `(DRENADO)` como `(DRENADO` (o parêntese de abertura entra no span, o de
+fechamento não); a pontuação de borda sai antes da comparação, então `drenado` basta.
+Teste: `python3 app/test_blocklist_termos_clinicos.py`.
+
 Junto, dois buracos por onde a blocklist deixava passar o termo listado:
 
 - **pontuação de borda.** `(DRENADO)` e `KDIGO:` não eram iguais a `drenado` e `kdigo`. A

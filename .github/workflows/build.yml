@@ -38,6 +38,9 @@ jobs:
       - name: Testar a blocklist extra e o filtro por forma
         run: python3 app/test_blocklist.py
 
+      - name: Testar os termos clinicos medidos em producao (11/2026)
+        run: python3 app/test_blocklist_termos_clinicos.py
+
       - name: Build Docker Image
         run: docker build -t anony .
       - name: Run Docker Image
