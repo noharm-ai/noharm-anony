@@ -276,8 +276,10 @@ só a blocklist diferente, sobre 267 evoluções reais (30 dias) com o texto ori
 | iamcsst | 59 | 0 | 0 |
 | aerolin | 14 | 0 | 0 |
 
-O modelo marca `(DRENADO)` como `(DRENADO` (o parêntese de abertura entra no span, o de
-fechamento não); a pontuação de borda sai antes da comparação, então `drenado` basta.
+Total de spans redigidos: 139 → 136; a diferença é só dos termos da lista, nenhum nome
+deixou de ser redigido. O modelo marca `(DRENADO)` como `(DRENADO` (o parêntese de abertura
+entra no span, o de fechamento não); a pontuação de borda já casaria `drenado`, e a forma
+`(drenado` também está na lista.
 Teste: `python3 app/test_blocklist_termos_clinicos.py`.
 
 Junto, dois buracos por onde a blocklist deixava passar o termo listado:

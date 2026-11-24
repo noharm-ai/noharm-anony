@@ -70,10 +70,11 @@ insônia
 # prevenção). Detalhe em `app/test_blocklist_termos_clinicos.py`.
 # O modelo devolve `(DRENADO` (parêntese de abertura dentro, o de fechamento fora), e
 # casa `drenado`: a pontuação de borda do span sai antes da comparação
-# (`blocklist.e_bloqueado`).
+# (`blocklist.e_bloqueado`). A forma medida `(drenado` fica também explícita abaixo.
 carvedilol
 kdigo
 gentamicina
 iamcsst
 aerolin
 drenado
+(drenado
