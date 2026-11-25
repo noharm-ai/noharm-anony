@@ -23,8 +23,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     # Fork não tem os secrets e falharia no login — e não deveria publicar de
-    # qualquer forma.
-    if: github.repository == 'noharm-ai/anony'
+    # qualquer forma. O nome tem de ser o do repositório de verdade: com
+    # `noharm-ai/anony` a condição nunca casava e o job saía `skipped` em todo
+    # push na main (os merges dos PRs #21 e #23 não publicaram imagem nenhuma).
+    if: github.repository == 'noharm-ai/noharm-anony'
     steps:
       - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
 
